@@ -17,7 +17,7 @@ Open http://localhost:3000. Use `npm run dev` to restart the server automaticall
 
 The seven supplied links are preloaded in `public/app.js`: LGMED 10, RICTU CALENDAR (decoded from the subscription link), Planning, Quality Management, Region10 Personnel Calendar, PDMU (dilg10pdmu@gmail.com), and LGCDD (lgcdd10dilg@gmail.com). Display names come from the actual Google feeds. All five public feeds were successfully checked during implementation.
 
-- The current month loads automatically. Day and Month views retrieve the selected month's events; Year retrieves January 1 through January 1 of the following year in Asia/Manila. Previous/next navigation follows the selected period. Requests are limited to 366 days, including leap years.
+- The full current year loads once when the page opens or refreshes. Today, Month, and Year reuse that data without importing again. Navigating to a different year automatically loads its full year. Requests use Asia/Manila boundaries and are limited to 366 days, including leap years.
 - Recurring events, exceptions, moved instances, cancellations, and all-day dates are handled by node-ical.
 - Displayed dates and times use Asia/Manila, even on devices in other timezones.
 - Add calendar links edits the list, saved in this browser. The server does not persist links or event data.

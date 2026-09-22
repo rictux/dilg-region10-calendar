@@ -1011,15 +1011,14 @@ $("linksForm").onsubmit = async (e) => {
 };
 
 function requestRange() {
-  const y = state.cursor.getUTCFullYear(),
-    m = state.view === "year" ? 0 : state.cursor.getUTCMonth();
+  const year = state.cursor.getUTCFullYear();
   return {
-    from: localKey(new Date(Date.UTC(y, m, 1))) + "T00:00:00+08:00",
-    to: localKey(new Date(Date.UTC(y, state.view === "year" ? 12 : m + 1, 1))) + "T00:00:00+08:00",
+    from: localKey(new Date(Date.UTC(year, 0, 1))) + "T00:00:00+08:00",
+    to: localKey(new Date(Date.UTC(year + 1, 0, 1))) + "T00:00:00+08:00",
   };
 }
 function periodKey() {
-  return state.cursor.getUTCFullYear() + "-" + (state.view === "year" ? "year" : state.cursor.getUTCMonth());
+  return String(state.cursor.getUTCFullYear());
 }
 function sourceName(link, index) {
   return DEFAULT_NAMES[DEFAULT_LINKS.indexOf(link)] || `Calendar ${index + 1}`;
