@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("live calendars, navigation, modal, export and responsive layout", async ({
+test("live calendars, navigation, modal and responsive layout", async ({
   page,
 }) => {
   const errors = [];
@@ -25,11 +25,8 @@ test("live calendars, navigation, modal, export and responsive layout", async ({
   await page.locator("#calendarList input").first().uncheck();
   await expect(page.locator("#calFilter")).toHaveText("4 selected ▾");
   await page.keyboard.press("Escape");
-  const download = page.waitForEvent("download");
-  await page.locator("#exportBtn").click();
-  expect((await download).suggestedFilename()).toBe(
-    "calendar-activity-dashboard.txt",
-  );
+  await expect(page.locator("#exportBtn, #connectBtn")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Overlapping conflicts", exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("#pageTitle")).toBeVisible();
@@ -62,5 +59,5 @@ test("failed feeds show unavailable data rather than an empty schedule", async (
   await expect(page.locator("#agenda")).toContainText(
     "Calendar data unavailable",
   );
-  await expect(page.locator("#exportBtn")).toBeDisabled();
+  await expect(page.locator("#exportBtn")).toHaveCount(0);
 });

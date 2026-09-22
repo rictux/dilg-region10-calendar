@@ -786,7 +786,7 @@ async function authorize(clientId) {
     state.source = "oauth";
     sourceResults = [];
     render();
-    $("connectBtn").textContent = "Refresh Google";
+    if ($("connectBtn")) $("connectBtn").textContent = "Refresh Google";
     $("sideStatus").textContent = "Google Calendar connected";
     $("sideDot").classList.add("live");
     toast("Calendars updated successfully.");
@@ -879,6 +879,7 @@ async function loadGoogleData() {
   render();
 }
 function setLoading(on) {
+  if (!$("connectBtn")) return;
   $("connectBtn").disabled = on;
   $("connectBtn").innerHTML = on
     ? '<span class="loading"></span> Loading…'
@@ -920,7 +921,6 @@ $("todayBtn").onclick = () => {
   state.cursor = manilaNow();
   refreshPeriod();
 };
-$("connectBtn").onclick = beginConnect;
 $("linkBtn").onclick = openLinksDialog;
 $("modeFilter").onchange = (e) => {
   state.modeFilter = e.target.value;
@@ -971,47 +971,6 @@ $("linksForm").onsubmit = async (e) => {
   const complete = await loadLinkedCalendars(links);
   if (complete) $("linksDialog").close();
 };
-$("exportBtn").onclick = () => {
-  const ev = currentEvents(),
-    [a] = range(),
-    conflicts = findConflicts(ev);
-  const detail = ev.flatMap((e) => {
-    const people =
-        peopleInvolved(e)
-          .map((p) => p.name)
-          .join(", ") || "Not specified",
-      guests = expectedGuests(e).join("; ") || "Not specified";
-    return [
-      "",
-      `${fmtDate(eventDate(e), { month: "short", day: "numeric" })} | ${isAllDay(e) ? "All day" : fmtDate(eventDate(e), { hour: "numeric", minute: "2-digit" })} | ${e.summary} | ${e.calendarName}`,
-      `Venue/platform: ${venueOf(e)}`,
-      `Format: ${deliveryMode(e)} | Event level: ${eventLevel(e)}`,
-      `Summary: ${descriptionBrief(e)}`,
-      `Groups: ${stakeholderCategories(e).join(", ")}`,
-      `People: ${people}`,
-      `Expected guests: ${guests}`,
-    ];
-  });
-  const lines = [
-    "CALENDAR ACTIVITY DASHBOARD",
-    "Timezone: Asia/Manila",
-    `${state.calendars.length} calendars loaded; ${sourceResults.filter((r) => r.error).length} unavailable.`,
-    state.view === "day"
-      ? fmtDate(a, { dateStyle: "full" })
-      : fmtDate(a, { month: "long", year: "numeric" }),
-    "",
-    `${ev.length} activities | ${formatHours(ev.reduce((n, e) => n + duration(e), 0))} scheduled | ${conflicts.length} possible conflicts`,
-    ...detail,
-  ];
-  const blob = new Blob([lines.join("\n")], { type: "text/plain" }),
-    url = URL.createObjectURL(blob),
-    aTag = document.createElement("a");
-  aTag.href = url;
-  aTag.download = "calendar-activity-dashboard.txt";
-  aTag.click();
-  URL.revokeObjectURL(url);
-  toast("Summary downloaded.");
-};
 
 function requestRange() {
   const y = state.cursor.getUTCFullYear(),
@@ -1029,11 +988,9 @@ function sourceName(link, index) {
 }
 function renderAvailability() {
   const unavailable = loading || !state.connected;
-  $("exportBtn").disabled = unavailable;
   $("prevBtn").disabled = loading;
   $("nextBtn").disabled = loading;
   $("todayBtn").disabled = loading;
-  $("connectBtn").disabled = loading;
   if (unavailable) {
     for (const id of [
       "metricEvents",
@@ -1048,7 +1005,7 @@ function renderAvailability() {
       : "Calendar activities could not be loaded.";
     $("insights").textContent = loading
       ? "Retrieving the selected month from Google Calendar."
-      : "Reload the page to retry, or use Google sign-in to access your calendars.";
+      : "Reload the page to retry, or check your calendar links and sharing permissions.";
     $("agenda").innerHTML =
       '<div class="empty"><strong>' +
       (loading ? "Loading activities…" : "Calendar data unavailable") +
