@@ -45,6 +45,16 @@ Google secret iCal links are also accepted. These links are credentials: if ente
 
 Deploy on a Node-capable host using `npm ci --omit=dev` and `npm start`. Set HOST=0.0.0.0 and the host-provided PORT, and serve through HTTPS. Static-only hosting cannot run the feed endpoint. Apply organizational access controls and request rate limits at the reverse proxy for an internal deployment. The app does not provide user accounts or a database.
 
+### Vercel
+
+The repository includes `vercel.json` selecting the Express framework. `server.js` exports the Express app as its default handler for Vercel, while `npm start` continues to run the local server. Vercel serves the existing `public/` assets through its CDN and runs the calendar API as a function.
+
+1. Deploy the repository root, containing `package.json`, `server.js`, and `vercel.json`.
+2. Use the **Express** framework preset. Leave Build Command and Output Directory overrides disabled; this project does not generate a `dist` directory. The default dependency installation is sufficient.
+3. Redeploy the updated commit. Check `/` for the dashboard and submit a calendar request to `/api/calendar-feed` to verify the backend.
+
+For `FUNCTION_INVOCATION_FAILED`, inspect the failed deployment's Runtime Logs for the first exception. The generic 500 page and request ID do not identify the underlying cause. See [Vercel's Express documentation](https://vercel.com/docs/frameworks/backend/express).
+
 ## Verify
 
 ```sh

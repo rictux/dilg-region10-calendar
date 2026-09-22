@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { fetchCalendar } from "./calendar.js";
 
 export const app = express();
+// Vercel imports this module rather than starting it with `node server.js`.
+export default app;
 app.disable("x-powered-by");
 app.use((req, res, next) => {
   res.set({

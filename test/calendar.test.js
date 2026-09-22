@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { calendarSource, parseCalendar } from "../calendar.js";
-import { app } from "../server.js";
+import app, { app as namedApp } from "../server.js";
+
+test("server exposes the Express handler as the default deployment export", () => {
+  assert.equal(typeof app, "function");
+  assert.equal(app, namedApp);
+});
 
 test("normalizes embed and base64 subscription links to the same public feed", () => {
   const id = "example@group.calendar.google.com";
