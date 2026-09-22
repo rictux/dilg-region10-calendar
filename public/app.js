@@ -77,7 +77,7 @@ try {
 let sourceResults = [],
   loading = false,
   requestVersion = 0,
-  loadedMonth = "";
+  loadedPeriod = "";
 const COLORS = [
   "#e96b3e",
   "#4c78a8",
@@ -133,23 +133,13 @@ const eventEnd = (e) =>
 const isAllDay = (e) => !e.start.dateTime;
 const duration = (e) =>
   isAllDay(e) ? 0 : Math.max(0, (eventEnd(e) - eventDate(e)) / 36e5);
-const category = (e) => {
-  const s = (e.summary + " " + (e.description || "")).toLowerCase();
-  if (/training|workshop|seminar|orientation|learning/.test(s))
-    return "Training";
-  if (/meeting|conference|call|huddle|committee|review/.test(s))
-    return "Meetings";
-  if (/field|travel|visit|inspection|onsite|on-site/.test(s))
-    return "Field work";
-  if (/report|admin|planning|documentation|deadline|submit/.test(s))
-    return "Admin";
-  return "Other";
-};
+const category=e=>{const s=(e.summary+' '+cleanDescription(e.description)).toLowerCase();if(/\b(training|workshop|seminar|webinar|orientation|learning session|capacity building)\b/.test(s))return'Training & Learning';if(/\b(monitoring|validation|inspection|assessment|audit|compliance check)\b/.test(s))return'Monitoring & Validation';if(/\b(technical assistance|coaching|mentoring|advisory support)\b/.test(s))return'Technical Assistance';if(/\b(consultation|dialogue|focus group|coordination|meeting|conference|call|huddle|committee)\b/.test(s))return'Meeting & Coordination';if(/\b(planning|review|evaluation|strategy|work plan)\b/.test(s))return'Planning & Review';if(/\b(field work|field visit|site visit|travel|deployment|onsite|on-site)\b/.test(s))return'Field Work & Visit';if(/\b(launch|ceremony|celebration|turnover|awarding|program)\b/.test(s))return'Program & Ceremony';if(/\b(report|administrative|documentation|procurement|deadline|submission|submit)\b/.test(s))return'Administrative';return'Other'};
 const plainText = (html) => {
   const d = new DOMParser().parseFromString(html || "", "text/html");
   return (d.body.textContent || "").replace(/\s+/g, " ").trim();
 };
 function stakeholderCategories(e) {
+  if (e.sourceEvents) return [...new Set(e.sourceEvents.flatMap(stakeholderCategories))];
   const attendeeText = (e.attendees || [])
       .map((a) => (a.displayName || "") + " " + (a.email || ""))
       .join(" "),
@@ -228,6 +218,7 @@ function peopleInvolved(e) {
   return rows;
 }
 function expectedGuests(e) {
+  if (e.sourceEvents) return [...new Set(e.sourceEvents.flatMap(expectedGuests))];
   const text = plainText(e.description || ""),
     pattern =
       /(?:^|[.!?]\s+)(expected guests?|guests?|participants?|attendees?|resource persons?|speakers?|officials involved|people involved)\s*[:\-]\s*([^.!?]+)/gi,
@@ -318,6 +309,24 @@ function eventLevel(e) {
     return "Regional";
   return "Unspecified";
 }
+function cleanDescription(raw){return plainText(String(raw||'').replace(/<br\s*\/?>/gi,'. ').replace(/<\/p>/gi,'. ')).replace(/https?:\/\/\S+/gi,' ').replace(/\b(?:meeting id|meeting code|passcode|password|dial[- ]?in|join (?:zoom|google meet|teams|the meeting))\s*[:\-]?\s*[^.!?]*/gi,' ').replace(/\b\+?\d[\d ()-]{8,}\d\b/g,' ').replace(/\s+([,.;])/g,'$1').replace(/\s+/g,' ').trim()}
+
+const normWords=value=>new Set(String(value||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>2&&!['the','and','for','with','from','this','that','activity','event','calendar','schedule'].includes(w)));
+function setSimilarity(a,b){if(!a.size||!b.size)return 0;let common=0;a.forEach(x=>{if(b.has(x))common++});return common/(a.size+b.size-common)}
+const textSimilarity=(a,b)=>setSimilarity(normWords(a),normWords(b));
+const normalizedName=value=>String(value||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+function labeledNames(e,labels){const text=cleanDescription(e.description),pattern=new RegExp('(?:^|[.!?]\\s+)('+labels+')\\s*[:\\-]\\s*([^.!?]+)','gi'),out=[];let m;while((m=pattern.exec(text)))m[2].split(/,|;|\band\b/i).map(x=>x.trim()).filter(x=>x&&x.length<80).forEach(x=>out.push(x));return out}
+function facilitators(e){if(e.facilitatorNames)return e.facilitatorNames;return[...new Set([e.organizer?.displayName||e.organizer?.email,...labeledNames(e,'facilitators?|resource persons?|speakers?|trainers?|presenters?')].filter(Boolean).map(x=>normalizedName(x)))]}
+function participants(e){if(e.sourceEvents)return[...new Set(e.sourceEvents.flatMap(participants))];return[...new Set([...(e.attendees||[]).map(a=>a.displayName||a.email),...labeledNames(e,'participants?|attendees?|expected guests?|guests?|delegates?')].filter(Boolean).map(x=>normalizedName(x)))]}
+function nameOverlap(a,b){const A=new Set(a),B=new Set(b);if(!A.size||!B.size)return 0;let n=0;A.forEach(x=>{if(B.has(x))n++});return n/Math.min(A.size,B.size)}
+function officeName(value){return String(value||'Unknown office').replace(/\s+(calendar|activities|events|schedule)$/i,'').trim()||'Unknown office'}
+function duplicateScore(a,b){if(a.calendarId===b.calendarId||localKey(eventDate(a))!==localKey(eventDate(b)))return 0;const title=textSimilarity(a.summary,b.summary),startGap=Math.abs(eventDate(a)-eventDate(b))/6e4,time=startGap<=15?1:startGap<=60?0.65:(eventDate(a)<eventEnd(b)&&eventDate(b)<eventEnd(a)?0.4:0),venue=textSimilarity(venueOf(a),venueOf(b)),fac=nameOverlap(facilitators(a),facilitators(b)),part=nameOverlap(participants(a),participants(b));if(title<.35||!time)return 0;return title*.48+time*.2+venue*.1+fac*.12+part*.1}
+function mergeGroup(group){
+  const best=[...group].sort((a,b)=>(cleanDescription(b.description).length+(b.summary||'').length)-(cleanDescription(a.description).length+(a.summary||'').length))[0],attendees=[],seenPeople=new Set();group.flatMap(e=>e.attendees||[]).forEach(a=>{const k=normalizedName(a.email||a.displayName);if(k&&!seenPeople.has(k)){seenPeople.add(k);attendees.push(a)}});const offices=[...new Set(group.map(e=>officeName(e.calendarName)))],locations=group.map(venueOf).filter(v=>v!=='Not specified'),location=locations.sort((a,b)=>locations.filter(x=>x===b).length-locations.filter(x=>x===a).length)[0]||'';
+  return{...best,id:'merged-'+group.map(e=>e.id).sort().join('-'),summary:best.summary,description:best.description,location,start:group.reduce((x,e)=>eventDate(e)<eventDate(x)?e:x,group[0]).start,end:group.reduce((x,e)=>eventEnd(e)>eventEnd(x)?e:x,group[0]).end,attendees,facilitatorNames:[...new Set(group.flatMap(facilitators))],calendarIds:[...new Set(group.map(e=>e.calendarId))],offices,calendarName:offices.join(', '),sourceEvents:group,sourceCount:group.length,mergedCount:group.length-1};
+}
+function mergeDuplicateActivities(events){const n=events.length,parent=Array.from({length:n},(_,i)=>i),find=x=>parent[x]===x?x:(parent[x]=find(parent[x])),join=(a,b)=>{a=find(a);b=find(b);if(a!==b)parent[b]=a},sorted=events.map((e,i)=>({e,i})).sort((a,b)=>eventDate(a.e)-eventDate(b.e));for(let x=0;x<sorted.length;x++)for(let y=x+1;y<sorted.length;y++){if(localKey(eventDate(sorted[x].e))!==localKey(eventDate(sorted[y].e)))break;const score=duplicateScore(sorted[x].e,sorted[y].e),title=textSimilarity(sorted[x].e.summary,sorted[y].e.summary);if(score>=.64||(score>=.55&&title>=.78))join(sorted[x].i,sorted[y].i)}const groups=new Map();events.forEach((e,i)=>{const r=find(i);if(!groups.has(r))groups.set(r,[]);groups.get(r).push(e)});return[...groups.values()].map(mergeGroup).sort((a,b)=>eventDate(a)-eventDate(b))}
+
 function findConflicts(ev) {
   const timed = ev.filter((e) => !isAllDay(e)),
     pairs = [];
@@ -336,6 +345,9 @@ function findConflicts(ev) {
 function range() {
   if (state.view === "day")
     return [startOfDay(state.cursor), endOfDay(state.cursor)];
+  if (state.view === "year")
+    return [new Date(Date.UTC(state.cursor.getUTCFullYear(), 0, 1)),
+      new Date(Date.UTC(state.cursor.getUTCFullYear() + 1, 0, 1) - 1)];
   const a = new Date(
       Date.UTC(state.cursor.getUTCFullYear(), state.cursor.getUTCMonth(), 1),
     ),
@@ -354,31 +366,28 @@ function range() {
 }
 function currentEvents({ ignoreGroup = false } = {}) {
   const [a, b] = range();
-  return state.events
-    .filter(
-      (e) =>
-        state.selected.has(e.calendarId) &&
-        eventDate(e) <= b &&
-        eventEnd(e) > a &&
-        e.status !== "cancelled" &&
-        (state.modeFilter === "all" || deliveryMode(e) === state.modeFilter) &&
-        (state.scopeFilter === "all" || eventLevel(e) === state.scopeFilter) &&
-        (ignoreGroup || state.groupFilter === "all" || stakeholderCategories(e).includes(state.groupFilter)),
-    )
-    .sort((x, y) => eventDate(x) - eventDate(y));
+  // Filter source calendars first so excluded offices cannot affect merged totals.
+  const reports = state.events.filter(e =>
+    state.selected.has(e.calendarId) && eventDate(e) <= b &&
+    eventEnd(e) > a && e.status !== "cancelled");
+  return mergeDuplicateActivities(reports).filter(e =>
+    (state.modeFilter === "all" || deliveryMode(e) === state.modeFilter) &&
+    (state.scopeFilter === "all" || eventLevel(e) === state.scopeFilter) &&
+    (ignoreGroup || state.groupFilter === "all" || stakeholderCategories(e).includes(state.groupFilter)));
+
 }
 function render() {
   const ev = currentEvents(),
     [a] = range(),
-    unique = new Set(ev.map((e) => e.calendarId)).size,
+    unique = new Set(ev.flatMap((e) => e.offices)).size,
     hours = ev.reduce((n, e) => n + duration(e), 0),
     conflicts = findConflicts(ev);
   $("pageTitle").textContent =
-    state.view === "day" ? "Today’s activity" : "Monthly activity";
+    state.view === "day" ? "Today’s activity" : state.view === "year" ? "Annual activity summary" : "Monthly activity";
   $("subtitle").textContent =
     state.view === "day"
       ? "A clear view of where your day is going."
-      : "Patterns and scheduled workload at a glance.";
+      : state.view === "year" ? "Activities and analytics for the entire year." : "Patterns and scheduled workload at a glance.";
   $("periodTitle").textContent =
     state.view === "day"
       ? fmtDate(a, {
@@ -387,32 +396,15 @@ function render() {
           day: "numeric",
           year: "numeric",
         })
-      : fmtDate(a, { month: "long", year: "numeric" });
+      : fmtDate(a, state.view === "year" ? { year: "numeric" } : { month: "long", year: "numeric" });
   $("metricEvents").textContent = ev.length;
-  $("metricHours").textContent = formatHours(hours);
-  $("metricCalendars").textContent = unique;
-  $("metricConflicts").textContent = conflicts.length;
-  $("metricEventsNote").textContent =
-    ev.length === 1 ? "scheduled activity" : "scheduled activities";
-  if (state.view === "day") {
-    const open = Math.max(0, 8 - hours);
-    $("metricFourthLabel").textContent = "Remaining capacity";
-    $("metricFourth").textContent = formatHours(open);
-    $("metricFourthNote").textContent = "8h less scheduled hours; estimate";
-  } else {
-    const counts = byDay(ev),
-      best = Object.entries(counts).sort((x, y) => y[1] - x[1])[0];
-    $("metricFourthLabel").textContent = "Busiest day";
-    $("metricFourth").textContent = best
-      ? fmtDate(new Date(best[0] + "T00:00:00Z"), {
-          month: "short",
-          day: "numeric",
-        })
-      : "—";
-    $("metricFourthNote").textContent = best
-      ? best[1] + " activities"
-      : "no activities this month";
-  }
+  $("metricMerged").textContent = ev.reduce((total, e) => total + e.mergedCount, 0);
+  $("metricOffices").textContent = unique;
+  $("metricConcurrent").textContent = conflicts.length;
+  $("metricEventsNote").textContent = "unique activities after consolidation";
+  $("metricFourthLabel").textContent = "Categories";
+  $("metricFourth").textContent = new Set(ev.map(category)).size;
+  $("metricFourthNote").textContent = "activity categories represented";
   renderSummary(ev, hours, conflicts);
   renderBreakdown(ev);
   renderAnalytics(ev);
@@ -445,6 +437,8 @@ function localKey(d) {
   );
 }
 function renderSummary(ev, hours, conflicts) {
+  $("summaryMode").textContent =
+    state.view === "day" ? "Daily digest" : state.view === "year" ? "Annual digest" : "Monthly digest";
   const cats = ev.reduce(
       (o, e) => ((o[category(e)] = (o[category(e)] || 0) + 1), o),
       {},
@@ -461,8 +455,10 @@ function renderSummary(ev, hours, conflicts) {
   $("summaryLead").textContent =
     state.view === "day"
       ? `You have ${ev.length} ${ev.length === 1 ? "activity" : "activities"} scheduled, accounting for ${formatHours(hours)} of timed work.`
-      : `This month contains ${ev.length} scheduled ${ev.length === 1 ? "activity" : "activities"} across ${new Set(ev.map((e) => e.calendarId)).size} calendars.`;
+      : `This ${state.view === "year" ? "year" : "month"} contains ${ev.length} scheduled ${ev.length === 1 ? "activity" : "activities"} across ${new Set(ev.flatMap((e) => e.offices)).size} reporting offices.`;
   const bits = [];
+  const merged = ev.reduce((total, e) => total + e.mergedCount, 0);
+  if (merged) bits.push(`<b>${merged} duplicate office ${merged === 1 ? "entry was" : "entries were"} merged</b> into the consolidated activity count.`);
   if (conflicts.length)
     bits.push(
       `<b>${conflicts.length} possible ${conflicts.length === 1 ? "conflict" : "conflicts"}</b> detected from overlapping timed activities.`,
@@ -488,7 +484,15 @@ function renderSummary(ev, hours, conflicts) {
     bits.push(
       `The longest scheduled activity is <b>${esc(longest.summary)}</b> at ${formatHours(duration(longest))}.`,
     );
-  if (state.view === "month") {
+  if (state.view === "year") {
+    const months = ev.reduce((counts, e) => {
+      const month = fmtDate(eventDate(e), { month: "long" });
+      counts[month] = (counts[month] || 0) + 1;
+      return counts;
+    }, {});
+    const peak = Object.entries(months).sort((a, b) => b[1] - a[1])[0];
+    if (peak) bits.unshift(`<b>${esc(peak[0])}</b> has the highest activity count at ${peak[1]}.`);
+  } else if (state.view === "month") {
     const best = Object.entries(byDay(ev)).sort((a, b) => b[1] - a[1])[0];
     if (best)
       bits.push(
@@ -513,8 +517,7 @@ function renderSummary(ev, hours, conflicts) {
         `<div class="insight"><span class="bullet"></span><span>${x}</span></div>`,
     )
     .join("");
-  $("summaryMode").textContent =
-    state.view === "day" ? "Daily digest" : "Monthly digest";
+
 }
 function renderBreakdown(ev) {
   const counts = ev.reduce(
@@ -690,7 +693,7 @@ function renderSuggestions(ev, conflicts) {
 }
 function renderAgenda(ev) {
   $("agendaTitle").textContent =
-    state.view === "day" ? "Daily activities" : "All monthly activities";
+    state.view === "day" ? "Daily activities" : state.view === "year" ? "All annual activities" : "All monthly activities";
   $("agendaCount").textContent =
     ev.length + " " + (ev.length === 1 ? "activity" : "activities");
   if (!ev.length) {
@@ -892,7 +895,7 @@ async function loadGoogleData() {
       .filter((c) => !previousIds.has(c.id) || previous.has(c.id))
       .map((c) => c.id),
   );
-  loadedMonth = monthKey();
+  loadedPeriod = periodKey();
   const seen = new Set();
   state.events = batches.flat().filter((e) => {
     const key =
@@ -923,8 +926,11 @@ function toast(msg) {
   setTimeout(() => $("toast").classList.remove("show"), 3200);
 }
 function movePeriod(n) {
+  if (loading) return;
   if (state.view === "day")
     state.cursor.setUTCDate(state.cursor.getUTCDate() + n);
+  else if (state.view === "year")
+    state.cursor = new Date(Date.UTC(state.cursor.getUTCFullYear() + n, 0, 1));
   else
     state.cursor = new Date(
       Date.UTC(
@@ -938,16 +944,18 @@ function movePeriod(n) {
 document.querySelectorAll("[data-view]").forEach(
   (b) =>
     (b.onclick = () => {
+      if (loading) return;
       state.view = b.dataset.view;
       document
         .querySelectorAll("[data-view]")
         .forEach((x) => x.classList.toggle("active", x === b));
-      render();
+      refreshPeriod();
     }),
 );
 $("prevBtn").onclick = () => movePeriod(-1);
 $("nextBtn").onclick = () => movePeriod(1);
 $("todayBtn").onclick = () => {
+  if (loading) return;
   state.cursor = manilaNow();
   refreshPeriod();
 };
@@ -1004,14 +1012,14 @@ $("linksForm").onsubmit = async (e) => {
 
 function requestRange() {
   const y = state.cursor.getUTCFullYear(),
-    m = state.cursor.getUTCMonth();
+    m = state.view === "year" ? 0 : state.cursor.getUTCMonth();
   return {
     from: localKey(new Date(Date.UTC(y, m, 1))) + "T00:00:00+08:00",
-    to: localKey(new Date(Date.UTC(y, m + 1, 1))) + "T00:00:00+08:00",
+    to: localKey(new Date(Date.UTC(y, state.view === "year" ? 12 : m + 1, 1))) + "T00:00:00+08:00",
   };
 }
-function monthKey() {
-  return state.cursor.getUTCFullYear() + "-" + state.cursor.getUTCMonth();
+function periodKey() {
+  return state.cursor.getUTCFullYear() + "-" + (state.view === "year" ? "year" : state.cursor.getUTCMonth());
 }
 function sourceName(link, index) {
   return DEFAULT_NAMES[DEFAULT_LINKS.indexOf(link)] || `Calendar ${index + 1}`;
@@ -1024,17 +1032,17 @@ function renderAvailability() {
   if (unavailable) {
     for (const id of [
       "metricEvents",
-      "metricHours",
-      "metricCalendars",
+      "metricMerged",
+      "metricOffices",
       "metricFourth",
-      "metricConflicts",
+      "metricConcurrent",
     ])
       $(id).textContent = "—";
     $("summaryLead").textContent = loading
       ? "Loading calendar activities…"
       : "Calendar activities could not be loaded.";
     $("insights").textContent = loading
-      ? "Retrieving the selected month from Google Calendar."
+      ? "Retrieving the selected period from Google Calendar."
       : "Reload the page to retry, or check your calendar links and sharing permissions.";
     $("agenda").innerHTML =
       '<div class="empty"><strong>' +
@@ -1143,7 +1151,7 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
       .map((c) => c.id),
   );
   state.connected = good.length > 0;
-  loadedMonth = monthKey();
+  loadedPeriod = periodKey();
   loading = false;
   if (save) safeWrite("calendar_digest_links", JSON.stringify(links));
   const errors = sourceResults.filter((r) => r.error);
@@ -1162,7 +1170,7 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
 }
 async function refreshPeriod(force = false) {
   if (loading) return;
-  if (!force && loadedMonth === monthKey()) {
+  if (!force && loadedPeriod === periodKey()) {
     render();
     return;
   }
@@ -1172,7 +1180,7 @@ async function refreshPeriod(force = false) {
     render();
     try {
       await loadGoogleData();
-      loadedMonth = monthKey();
+      loadedPeriod = periodKey();
       state.connected = true;
     } catch (error) {
       state.connected = false;

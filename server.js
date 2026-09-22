@@ -28,11 +28,11 @@ app.post("/api/calendar-feed", async (req, res) => {
     !Number.isFinite(+from) ||
     !Number.isFinite(+to) ||
     to <= from ||
-    to - from > 100 * 86400000
+    to - from > 366 * 86400000
   )
     return res
       .status(400)
-      .json({ error: "Provide a date range of at most 100 days." });
+      .json({ error: "Provide a date range of at most 366 days." });
   if (activeRequests >= 20)
     return res
       .status(429)
