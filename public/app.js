@@ -69,6 +69,7 @@ const state = {
   source: "links",
   modeFilter: "all",
   scopeFilter: "all",
+  groupFilter: "all",
 };
 const $ = (id) => document.getElementById(id);
 const fmtDate = (d, opt = {}) =>
@@ -321,7 +322,7 @@ function range() {
     );
   return [a, b];
 }
-function currentEvents() {
+function currentEvents({ ignoreGroup = false } = {}) {
   const [a, b] = range();
   return state.events
     .filter(
@@ -331,7 +332,8 @@ function currentEvents() {
         eventEnd(e) > a &&
         e.status !== "cancelled" &&
         (state.modeFilter === "all" || deliveryMode(e) === state.modeFilter) &&
-        (state.scopeFilter === "all" || eventLevel(e) === state.scopeFilter),
+        (state.scopeFilter === "all" || eventLevel(e) === state.scopeFilter) &&
+        (ignoreGroup || state.groupFilter === "all" || stakeholderCategories(e).includes(state.groupFilter)),
     )
     .sort((x, y) => eventDate(x) - eventDate(y));
 }
@@ -384,7 +386,7 @@ function render() {
   renderSummary(ev, hours, conflicts);
   renderBreakdown(ev);
   renderAnalytics(ev);
-  renderStakeholders(ev);
+  renderStakeholders(currentEvents({ ignoreGroup: true }));
   renderConflicts(conflicts);
   renderSuggestions(ev, conflicts);
   renderAgenda(ev);
@@ -544,15 +546,28 @@ function renderStakeholders(ev) {
       .flatMap(stakeholderCategories)
       .reduce((o, k) => ((o[k] = (o[k] || 0) + 1), o), {});
   $("stakeholders").innerHTML =
+    `<button type="button" class="stake-box" data-group="all" aria-pressed="${state.groupFilter === "all"}"><strong>${ev.length}</strong><span>All groups</span></button>` +
     order
-      .filter((k) => counts[k])
+      .filter((k) => counts[k] || state.groupFilter === k)
       .map(
         (k) =>
-          `<div class="stake-box"><strong>${counts[k]}</strong><span>${esc(k)}</span></div>`,
+          `<button type="button" class="stake-box" data-group="${esc(k)}" aria-pressed="${state.groupFilter === k}"><strong>${counts[k] || 0}</strong><span>${esc(k)}</span></button>`,
       )
-      .join("") ||
-    '<div class="empty"><strong>No groups identified</strong>Add organization or participant information to event descriptions.</div>';
+      .join("");
+  $("groupFilterStatus").textContent = state.groupFilter === "all"
+    ? "Select a group to filter activities. Activities may belong to several groups."
+    : `Filtering by ${state.groupFilter}. Select it again or All groups to clear.`;
 }
+$("stakeholders").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-group]");
+  if (!button) return;
+  const group = button.dataset.group;
+  state.groupFilter = state.groupFilter === group ? "all" : group;
+  render();
+  // Rendering replaces the cards; keep focus on the activated control.
+  [...$("stakeholders").querySelectorAll("[data-group]")]
+    .find((item) => item.dataset.group === group)?.focus();
+});
 function renderConflicts(pairs) {
   $("conflictCount").textContent = pairs.length
     ? `${pairs.length} detected`
