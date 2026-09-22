@@ -1,0 +1,925 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A professional dashboard for daily and monthly activities across added Google Calendars."
+    />
+    <title>DILG Region 10 | Calendar Activity Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com/" />
+    <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%231b3b2f'/%3E%3Crect x='14' y='17' width='36' height='33' rx='6' fill='%23fffaf0'/%3E%3Cpath d='M14 26h36' stroke='%23e96b3e' stroke-width='5'/%3E%3Cpath d='M23 12v10M41 12v10' stroke='%23fffaf0' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='m23 38 6 6 13-14' fill='none' stroke='%231b3b2f' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
+    />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <link rel="stylesheet" href="/styles.css" />
+    <style id="googleidentityservice_button_styles">
+      .qJTHM {
+        -moz-user-select: none;
+        -webkit-user-select: none;
+        -ms-user-select: none;
+        color: #202124;
+        direction: ltr;
+        -webkit-touch-callout: none;
+        font-family: Roboto-Regular, arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        font-weight: 400;
+        margin: 0;
+        overflow: hidden;
+        -webkit-text-size-adjust: 100%;
+      }
+      .ynRLnc {
+        left: -9999px;
+        position: absolute;
+        top: -9999px;
+      }
+      .L6cTce {
+        display: none;
+      }
+      .bltWBb {
+        overflow-wrap: break-word;
+        word-break: break-word;
+      }
+      .hSRGPd {
+        color: #1a73e8;
+        cursor: pointer;
+        font-weight: 500;
+        text-decoration: none;
+      }
+      .Bz112c-W3lGp {
+        height: 16px;
+        width: 16px;
+      }
+      .Bz112c-E3DyYd {
+        height: 20px;
+        width: 20px;
+      }
+      .Bz112c-r9oPif {
+        height: 24px;
+        width: 24px;
+      }
+      .Bz112c-u2z5K {
+        height: 36px;
+        width: 36px;
+      }
+      .Bz112c-uaxL4e {
+        border-radius: 10px;
+      }
+      .LgbsSe-Bz112c {
+        display: block;
+      }
+      .S9gUrf-YoZ4jf {
+        border: none;
+        margin: 0;
+        padding: 0;
+      }
+      .S9gUrf-YoZ4jf * {
+        border: none;
+        margin: 0;
+        padding: 0;
+      }
+      .fFW7wc-ibnC6b > .aZ2wEe > div {
+        border-color: #4285f4;
+      }
+      .P1ekSe-ZMv3u {
+        -webkit-transition: height 0.2s linear;
+        transition: height 0.2s linear;
+      }
+      .P1ekSe-ZMv3u > div:first-child {
+        background-color: #1a73e8 !important;
+        -webkit-transition: width 0.3s linear;
+        transition: width 0.3s linear;
+      }
+      .P1ekSe-ZMv3u > div:nth-child(2) {
+        background-image:
+          -webkit-gradient(
+            linear,
+            left top,
+            right top,
+            from(rgba(255, 255, 255, 0.7)),
+            to(rgba(255, 255, 255, 0.7))
+          ),
+          -webkit-gradient(
+              linear,
+              left top,
+              right top,
+              from(#1a73e8),
+              to(#1a73e8)
+            ) !important;
+        background-image:
+          -webkit-linear-gradient(
+            left,
+            rgba(255, 255, 255, 0.7),
+            rgba(255, 255, 255, 0.7)
+          ),
+          -webkit-linear-gradient(left, #1a73e8, #1a73e8) !important;
+        background-image:
+          linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.7),
+            rgba(255, 255, 255, 0.7)
+          ),
+          linear-gradient(90deg, #1a73e8, #1a73e8) !important;
+      }
+      .P1ekSe-ZMv3u > div:nth-child(3) {
+        background-image:
+          -webkit-gradient(
+            linear,
+            left top,
+            right top,
+            from(rgba(255, 255, 255, 0.7)),
+            to(rgba(255, 255, 255, 0.7))
+          ),
+          -webkit-gradient(
+              linear,
+              left top,
+              right top,
+              from(#1a73e8),
+              to(#1a73e8)
+            ) !important;
+        background-image:
+          -webkit-linear-gradient(
+            left,
+            rgba(255, 255, 255, 0.7),
+            rgba(255, 255, 255, 0.7)
+          ),
+          -webkit-linear-gradient(left, #1a73e8, #1a73e8) !important;
+        background-image:
+          linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.7),
+            rgba(255, 255, 255, 0.7)
+          ),
+          linear-gradient(90deg, #1a73e8, #1a73e8) !important;
+      }
+      .haAclf {
+        display: inline-block;
+      }
+      .nsm7Bb-HzV7m-LgbsSe {
+        border-radius: 4px;
+        box-sizing: border-box;
+        -webkit-transition:
+          background-color 0.218s,
+          border-color 0.218s;
+        transition:
+          background-color 0.218s,
+          border-color 0.218s;
+        -moz-user-select: none;
+        -webkit-user-select: none;
+        -ms-user-select: none;
+        -webkit-appearance: none;
+        background-color: #fff;
+        background-image: none;
+        border: 1px solid #dadce0;
+        color: #3c4043;
+        cursor: pointer;
+        font-family:
+          Google Sans,
+          arial,
+          sans-serif;
+        font-size: 0.875rem;
+        height: 40px;
+        letter-spacing: 0.25px;
+        outline: none;
+        overflow: hidden;
+        padding: 0 12px;
+        position: relative;
+        text-align: center;
+        vertical-align: middle;
+        white-space: nowrap;
+        width: auto;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.TzA9Ye-LgbsSe {
+        font-size: 14px;
+      }
+      @media screen and (-ms-high-contrast: active) {
+        .nsm7Bb-HzV7m-LgbsSe {
+          border: 2px solid windowText;
+          color: windowText;
+        }
+      }
+      @media screen and (preferes-contrast: more) {
+        .nsm7Bb-HzV7m-LgbsSe {
+          color: #000;
+        }
+      }
+      .nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe {
+        font-size: 0.875rem;
+        height: 32px;
+        letter-spacing: 0.25px;
+        padding: 0 10px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe.TzA9Ye-LgbsSe {
+        font-size: 14px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe {
+        font-size: 0.6875rem;
+        height: 20px;
+        letter-spacing: 0.3px;
+        padding: 0 8px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe.TzA9Ye-LgbsSe {
+        font-size: 11px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe {
+        padding: 0;
+        width: 40px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.pSzOP-SxQuSe {
+        width: 32px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.purZT-SxQuSe {
+        width: 20px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK {
+        border-radius: 20px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK.pSzOP-SxQuSe {
+        border-radius: 16px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK.purZT-SxQuSe {
+        border-radius: 10px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.i5vt6e-to915-Ia7Qfc {
+        border: 1px solid #8e918f;
+        background-color: #131314;
+        color: #e3e3e3;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc {
+        border: none;
+        color: #fff;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.MFS4be-v3pZbf-Ia7Qfc {
+        background-color: #1a73e8;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.MFS4be-JaPV2b-Ia7Qfc {
+        background-color: #202124;
+        color: #e8eaed;
+      }
+      @media screen and (prefers-contrast: more) {
+        .nsm7Bb-HzV7m-LgbsSe.MFS4be-JaPV2b-Ia7Qfc {
+          color: #fff;
+        }
+      }
+      .nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c {
+        height: 18px;
+        margin-right: 8px;
+        min-width: 18px;
+        width: 18px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c {
+        height: 14px;
+        min-width: 14px;
+        width: 14px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c {
+        height: 10px;
+        min-width: 10px;
+        width: 10px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-Bz112c {
+        margin-left: 8px;
+        margin-right: -4px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c {
+        margin: 0;
+        padding: 10px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.pSzOP-SxQuSe
+        .nsm7Bb-HzV7m-LgbsSe-Bz112c {
+        padding: 8px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.purZT-SxQuSe
+        .nsm7Bb-HzV7m-LgbsSe-Bz112c {
+        padding: 4px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+        border-top-left-radius: 3px;
+        border-bottom-left-radius: 3px;
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-pack: center;
+        -webkit-justify-content: center;
+        justify-content: center;
+        -webkit-box-align: center;
+        -webkit-align-items: center;
+        align-items: center;
+        background-color: #fff;
+        height: 36px;
+        margin-left: -10px;
+        margin-right: 12px;
+        min-width: 36px;
+        width: 36px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe
+        .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf
+        .nsm7Bb-HzV7m-LgbsSe-Bz112c,
+      .nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe
+        .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf
+        .nsm7Bb-HzV7m-LgbsSe-Bz112c {
+        margin: 0;
+        padding: 0;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+        height: 28px;
+        margin-left: -8px;
+        margin-right: 10px;
+        min-width: 28px;
+        width: 28px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+        height: 16px;
+        margin-left: -6px;
+        margin-right: 8px;
+        min-width: 16px;
+        width: 16px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+        border-radius: 3px;
+        margin-left: 2px;
+        margin-right: 0;
+        padding: 0;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+        border-radius: 18px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe.JGcpL-RbRzK
+        .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+        border-radius: 14px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe.JGcpL-RbRzK
+        .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+        border-radius: 8px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-bN97Pc-sM5MNb {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-align-items: center;
+        -webkit-box-align: center;
+        align-items: center;
+        -webkit-flex-direction: row;
+        -webkit-box-orient: horizontal;
+        -webkit-box-direction: normal;
+        flex-direction: row;
+        -webkit-box-pack: justify;
+        -webkit-justify-content: space-between;
+        justify-content: space-between;
+        -webkit-flex-wrap: nowrap;
+        flex-wrap: nowrap;
+        height: 100%;
+        position: relative;
+        width: 100%;
+      }
+      .nsm7Bb-HzV7m-LgbsSe .oXtfBe-l4eHX {
+        -webkit-box-pack: center;
+        -webkit-justify-content: center;
+        justify-content: center;
+      }
+      .nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-BPrWId {
+        -webkit-flex-grow: 1;
+        -webkit-box-flex: 1;
+        flex-grow: 1;
+        font-family:
+          Google Sans,
+          arial,
+          sans-serif;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: top;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-BPrWId {
+        font-weight: 300;
+      }
+      .nsm7Bb-HzV7m-LgbsSe .oXtfBe-l4eHX .nsm7Bb-HzV7m-LgbsSe-BPrWId {
+        -webkit-flex-grow: 0;
+        -webkit-box-flex: 0;
+        flex-grow: 0;
+      }
+      .nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
+        -webkit-transition: background-color 0.218s;
+        transition: background-color 0.218s;
+        bottom: 0;
+        left: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+      }
+      .nsm7Bb-HzV7m-LgbsSe:focus,
+      .nsm7Bb-HzV7m-LgbsSe:hover {
+        box-shadow: none;
+        border-color: rgb(210, 227, 252);
+        outline: none;
+      }
+      .nsm7Bb-HzV7m-LgbsSe:focus-within {
+        outline: 2px solid #00639b;
+        border-color: transparent;
+      }
+      .nsm7Bb-HzV7m-LgbsSe:hover .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
+        background: rgba(66, 133, 244, 0.08);
+      }
+      .nsm7Bb-HzV7m-LgbsSe:active .nsm7Bb-HzV7m-LgbsSe-MJoBVe,
+      .nsm7Bb-HzV7m-LgbsSe:focus .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
+        background: rgba(66, 133, 244, 0.1);
+      }
+      .nsm7Bb-HzV7m-LgbsSe.i5vt6e-to915-Ia7Qfc:hover
+        .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .nsm7Bb-HzV7m-LgbsSe.i5vt6e-to915-Ia7Qfc:active
+        .nsm7Bb-HzV7m-LgbsSe-MJoBVe,
+      .nsm7Bb-HzV7m-LgbsSe.i5vt6e-to915-Ia7Qfc:focus
+        .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      .nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc:hover .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
+        background: rgba(255, 255, 255, 0.24);
+      }
+      .nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc:active .nsm7Bb-HzV7m-LgbsSe-MJoBVe,
+      .nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc:focus .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
+        background: rgba(255, 255, 255, 0.32);
+      }
+      .nsm7Bb-HzV7m-LgbsSe .n1UuX-DkfjY {
+        border-radius: 50%;
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        height: 20px;
+        margin-left: -4px;
+        margin-right: 8px;
+        min-width: 20px;
+        width: 20px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId {
+        font-family: Roboto;
+        font-size: 12px;
+        text-align: left;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff .fmcmS,
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .ssJRIf {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-align-items: center;
+        -webkit-box-align: center;
+        align-items: center;
+        color: #5f6368;
+        fill: #5f6368;
+        font-size: 11px;
+        font-weight: 400;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe.i5vt6e-to915-Ia7Qfc
+        .nsm7Bb-HzV7m-LgbsSe-BPrWId
+        .K4efff {
+        color: #c4c7c5;
+        fill: #c4c7c5;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe.MFS4be-Ia7Qfc
+        .nsm7Bb-HzV7m-LgbsSe-BPrWId
+        .K4efff {
+        color: #e8eaed;
+        fill: #e8eaed;
+      }
+      @media screen and (prefers-contrast: more) {
+        .nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff,
+        .nsm7Bb-HzV7m-LgbsSe.jVeSEe.MFS4be-Ia7Qfc
+          .nsm7Bb-HzV7m-LgbsSe-BPrWId
+          .K4efff {
+          color: #000;
+          fill: #000;
+        }
+      }
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff .Bz112c {
+        height: 18px;
+        margin: -3px -3px -3px 2px;
+        min-width: 18px;
+        width: 18px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        border-top-right-radius: 3px;
+        border-bottom-right-radius: 3px;
+        margin-left: 12px;
+        margin-right: -10px;
+      }
+      .nsm7Bb-HzV7m-LgbsSe.jVeSEe.JGcpL-RbRzK
+        .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+        border-radius: 18px;
+      }
+      .L5Fo6c-sM5MNb {
+        border: 0;
+        display: block;
+        left: 0;
+        position: relative;
+        top: 0;
+      }
+      .L5Fo6c-bF1uUb {
+        border-radius: 4px;
+        bottom: 0;
+        cursor: pointer;
+        left: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+      }
+      .L5Fo6c-bF1uUb:focus {
+        border: none;
+        outline: none;
+      }
+      sentinel {
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#pageTitle">Skip to dashboard</a
+    ><noscript
+      >This dashboard requires JavaScript to load Google Calendar
+      activities.</noscript
+    >
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="5" width="18" height="16" rx="3"></rect>
+              <path d="M16 3v4M8 3v4M3 10h18"></path>
+            </svg>
+          </div>
+          <div>
+            <strong>Activity Dashboard</strong><span>All calendars</span>
+          </div>
+        </div>
+        <p class="side-label">Summary</p>
+        <nav class="nav">
+          <button class="active" data-view="day">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="5" width="18" height="16" rx="3"></rect>
+              <path d="M16 3v4M8 3v4M3 10h18"></path></svg
+            ><span>Today</span>
+          </button>
+          <button data-view="month">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M4 5h16v16H4zM4 10h16M9 5v16M15 5v16"></path></svg
+            ><span>Month</span>
+          </button>
+        </nav>
+        <div class="side-bottom">
+          <div class="privacy">
+            <strong
+              ><span id="sideDot" class="status-dot"></span
+              ><span id="sideStatus">Loading calendars…</span></strong
+            >DILG Region 10 · Asia/Manila<br />Read-only calendar dashboard.
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <h1 id="pageTitle">Today’s activity</h1>
+            <p id="subtitle">A clear view of where your day is going.</p>
+          </div>
+          <div class="actions">
+            <button class="btn" id="exportBtn" title="Download summary">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14"></path></svg
+              ><span>Export</span>
+            </button>
+            <button
+              class="btn"
+              id="connectBtn"
+              title="Connect with Google account"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="5" width="18" height="16" rx="3"></rect>
+                <path d="M3 10h18M8 3v4M16 3v4"></path></svg
+              ><span>Google sign-in</span>
+            </button>
+            <button class="btn primary" id="linkBtn">Add calendar links</button>
+          </div>
+        </header>
+
+<div class="toolbar">
+          <div class="period">
+            <button class="icon-btn" id="prevBtn" aria-label="Previous period">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="m15 18-6-6 6-6"></path>
+              </svg>
+            </button>
+            <div class="period-title" id="periodTitle">Loading…</div>
+            <button class="icon-btn" id="nextBtn" aria-label="Next period">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="m9 18 6-6-6-6"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="filters">
+            <button class="select-like" id="todayBtn">Today</button
+            ><select
+              class="select-like"
+              id="modeFilter"
+              aria-label="Filter by delivery mode"
+            >
+              <option value="all">All formats</option>
+              <option value="Online">Online</option>
+              <option value="Face-to-face">Face-to-face</option>
+              <option value="Hybrid">Hybrid</option>
+              <option value="Unspecified">Unspecified</option></select
+            ><select
+              class="select-like"
+              id="scopeFilter"
+              aria-label="Filter by event level"
+            >
+              <option value="all">All event levels</option>
+              <option value="Regional">Regional</option>
+              <option value="Field Office">Field Office</option>
+              <option value="Unspecified">Unspecified</option>
+            </select>
+            <div class="relative">
+              <button class="select-like" id="calFilter" aria-expanded="false" aria-controls="calendarMenu">
+                All calendars ▾
+              </button>
+              <div class="calendar-menu" id="calendarMenu" hidden="">
+                <h3 id="calendarFilterHeading">Calendars included</h3>
+                <div id="calendarList" role="group" aria-labelledby="calendarFilterHeading"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section class="metrics">
+          <article class="metric">
+            <div class="metric-head">
+              <span>Activities</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M4 6h16M4 12h16M4 18h10"></path></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricEvents">—</div>
+            <div class="metric-note" id="metricEventsNote">
+              scheduled activities
+            </div>
+          </article>
+          <article class="metric">
+            <div class="metric-head">
+              <span>Scheduled time</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M12 7v5l3 2"></path></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricHours">—</div>
+            <div class="metric-note" id="metricHoursNote">
+              excluding all-day events
+            </div>
+          </article>
+          <article class="metric">
+            <div class="metric-head">
+              <span>Calendars</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="3" y="5" width="18" height="16" rx="3"></rect>
+                  <path d="M3 10h18"></path></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricCalendars">—</div>
+            <div class="metric-note">with activity in this period</div>
+          </article>
+          <article class="metric">
+            <div class="metric-head">
+              <span id="metricFourthLabel">Open time</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m5 12 4 4L19 6"></path></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricFourth">—</div>
+            <div class="metric-note" id="metricFourthNote">
+              in an 8-hour workday
+            </div>
+          </article>
+          <article class="metric alert">
+            <div class="metric-head">
+              <span>Possible conflicts</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 9v4m0 4h.01M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"
+                  ></path></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricConflicts">—</div>
+            <div class="metric-note">overlapping timed activities</div>
+          </article>
+        </section>
+
+        <section class="grid">
+          <article class="card">
+            <div class="card-head">
+              <h2>Activity summary</h2>
+              <span id="summaryMode">Daily digest</span>
+            </div>
+            <div class="summary">
+              <p class="summary-lead" id="summaryLead">—</p>
+              <div class="insights" id="insights"></div>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-head">
+              <h2>Activity mix</h2>
+              <span>By category</span>
+            </div>
+            <div class="breakdown" id="breakdown"></div>
+          </article>
+          <article class="card wide-card">
+            <div class="card-head">
+              <h2>Quick analytics</h2>
+              <span>Current filters and period</span>
+            </div>
+            <div class="analytics" id="analytics"></div>
+          </article>
+          <article class="card wide-card">
+            <div class="card-head">
+              <h2>Organizations and groups involved</h2>
+              <span>One activity may appear in several categories</span>
+            </div>
+            <div class="stakeholders" id="stakeholders"></div>
+          </article>
+          <article class="card wide-card">
+            <div class="card-head">
+              <h2>Possible schedule conflicts</h2>
+              <span id="conflictCount">—</span>
+            </div>
+            <div class="conflicts" id="conflicts"></div>
+          </article>
+          <article class="card wide-card">
+            <div class="card-head">
+              <h2>Suggested actions</h2>
+              <span>Based on calendar details</span>
+            </div>
+            <div class="suggestions" id="suggestions"></div>
+          </article>
+          <article class="card agenda-card">
+            <div class="card-head">
+              <h2 id="agendaTitle">Today’s activities</h2>
+              <span id="agendaCount">—</span>
+            </div>
+            <div class="agenda" id="agenda"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="linksDialog">
+      <form class="modal" method="dialog" id="linksForm">
+        <h2>Add shared calendars</h2>
+        <p>
+          Paste one Google Calendar share link or iCal address per line. You can
+          add several calendars together.
+        </p>
+        <label for="calendarLinks">Calendar links</label
+        ><textarea
+          id="calendarLinks"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="https://calendar.google.com/calendar/…
+https://calendar.google.com/calendar/ical/…/basic.ics"
+        ></textarea>
+        <div class="link-help">
+          <span
+            ><b>Public calendar:</b> Its normal share or embed link will
+            work.</span
+          ><span
+            ><b>Private calendar:</b> Use “Settings and sharing → Integrate
+            calendar → Secret address in iCal format.”</span
+          >
+        </div>
+        <div role="alert" class="error" id="linksError"></div>
+        <div class="modal-actions">
+          <button
+            class="btn"
+            type="button"
+            onclick="this.closest('dialog').close()"
+          >
+            Cancel</button
+          ><button class="btn primary" value="default" id="importLinksBtn">
+            Import calendars
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="setupDialog">
+      <form class="modal" method="dialog" id="setupForm">
+        <h2>Connect with Google account</h2>
+        <p>
+          This optional method connects all calendars visible to your account.
+          It requires a Google OAuth Client ID.
+        </p>
+        <label for="clientId">Google OAuth Client ID</label
+        ><input
+          id="clientId"
+          autocomplete="off"
+          placeholder="123456789-abc.apps.googleusercontent.com"
+        />
+        <p class="hint">
+          In Google Cloud, enable the Calendar API and add this site’s URL under
+          Authorized JavaScript origins.
+        </p>
+        <div role="alert" class="error" id="setupError"></div>
+        <div class="modal-actions">
+          <button
+            class="btn"
+            type="button"
+            onclick="this.closest('dialog').close()"
+          >
+            Cancel</button
+          ><button class="btn primary" value="default" id="saveConnect">
+            Save &amp; connect
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
