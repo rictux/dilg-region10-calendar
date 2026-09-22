@@ -7,7 +7,7 @@ test("live calendars, navigation, modal and responsive layout", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await expect(page.locator("#sideStatus")).toHaveText(
-    "5 of 5 calendars loaded",
+    "7 of 7 calendars loaded",
     { timeout: 45000 },
   );
   await expect(page.locator(".source-card")).toHaveCount(0);
@@ -21,9 +21,9 @@ test("live calendars, navigation, modal and responsive layout", async ({
     .click();
   await expect(page.locator("#linksDialog")).not.toBeVisible();
   await page.locator("#calFilter").click();
-  await expect(page.locator("#calendarList input")).toHaveCount(5);
+  await expect(page.locator("#calendarList input")).toHaveCount(7);
   await page.locator("#calendarList input").first().uncheck();
-  await expect(page.locator("#calFilter")).toHaveText("4 selected ▾");
+  await expect(page.locator("#calFilter")).toHaveText("6 selected ▾");
   await page.keyboard.press("Escape");
   await expect(page.locator("#exportBtn, #connectBtn")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Overlapping conflicts", exact: true })).toBeVisible();
@@ -53,7 +53,7 @@ test("failed feeds show unavailable data rather than an empty schedule", async (
   );
   await page.goto("/");
   await expect(page.locator("#sideStatus")).toHaveText(
-    "0 of 5 calendars loaded",
+    "0 of 7 calendars loaded",
   );
   await expect(page.locator("#metricEvents")).toHaveText("—");
   await expect(page.locator("#agenda")).toContainText(

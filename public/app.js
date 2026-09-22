@@ -9,6 +9,8 @@ const DEFAULT_LINKS = [
   "https://calendar.google.com/calendar/embed?src=rtenplanning%40gmail.com&ctz=Asia%2FManila",
   "https://calendar.google.com/calendar/embed?src=qmsec10dilg%40gmail.com&ctz=Asia%2FManila",
   "https://calendar.google.com/calendar/embed?src=region10personnel%40gmail.com&ctz=Asia%2FManila",
+  "https://calendar.google.com/calendar/u/0?cid=ZGlsZzEwcGRtdUBnbWFpbC5jb20",
+  "https://calendar.google.com/calendar/embed?src=lgcdd10dilg%40gmail.com&ctz=Asia%2FManila",
 ];
 const DEFAULT_NAMES = [
   "LGMED",
@@ -16,6 +18,8 @@ const DEFAULT_NAMES = [
   "Planning",
   "Quality Management",
   "Personnel",
+  "PDMU",
+  "LGCDD",
 ];
 function safeRead(key) {
   try {
@@ -41,8 +45,34 @@ try {
     saved.length &&
     saved.length <= 15 &&
     saved.every((x) => typeof x === "string")
-  )
-    activeLinks = saved;
+  ) {
+    activeLinks = [...saved];
+    // Add the newly configured calendar once without replacing custom links.
+    // The marker lets users remove it later without it reappearing on reload.
+    for (const [key, calendarId, calendarLink] of [
+      ["calendar_digest_pdmu_added", "dilg10pdmu@gmail.com", DEFAULT_LINKS[5]],
+      ["calendar_digest_lgcdd_added", "lgcdd10dilg@gmail.com", DEFAULT_LINKS[6]],
+    ]) {
+      if (safeRead(key)) continue;
+      const included = activeLinks.some((link) => {
+        try {
+          const params = new URL(link).searchParams;
+          const cid = params.get("cid") || "";
+          const id = params.get("src") || (cid.includes("@") ? cid : atob(cid));
+          return id.toLowerCase() === calendarId || decodeURIComponent(link).toLowerCase().includes(`/${calendarId}/`);
+        } catch { return false; }
+      });
+      const canAdd = !included && activeLinks.length < 15;
+      if (canAdd) activeLinks.push(calendarLink);
+      if (included || canAdd) {
+        localStorage.setItem("calendar_digest_links", JSON.stringify(activeLinks));
+        localStorage.setItem(key, "1");
+      }
+    }
+  } else {
+    localStorage.setItem("calendar_digest_pdmu_added", "1");
+    localStorage.setItem("calendar_digest_lgcdd_added", "1");
+  }
 } catch {}
 let sourceResults = [],
   loading = false,

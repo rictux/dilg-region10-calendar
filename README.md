@@ -15,7 +15,7 @@ Open http://localhost:3000. Use `npm run dev` to restart the server automaticall
 
 ## Included calendars
 
-The five supplied links are preloaded in `public/app.js`: LGMED 10, RICTU CALENDAR (decoded from the subscription link), Planning, Quality Management, and Region10 Personnel Calendar. Display names come from the actual Google feeds. All five public feeds were successfully checked during implementation.
+The seven supplied links are preloaded in `public/app.js`: LGMED 10, RICTU CALENDAR (decoded from the subscription link), Planning, Quality Management, Region10 Personnel Calendar, PDMU (dilg10pdmu@gmail.com), and LGCDD (lgcdd10dilg@gmail.com). Display names come from the actual Google feeds. All five public feeds were successfully checked during implementation.
 
 - The current month loads automatically; navigating to another month retrieves that month's events.
 - Recurring events, exceptions, moved instances, cancellations, and all-day dates are handled by node-ical.
@@ -63,4 +63,4 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The browser smoke test requires access to the five Google feeds. It checks month navigation, filtering, modal cancellation, export, mobile layout, and JavaScript errors using a device timezone outside the Philippines. Screenshots are written to the ignored test-results directory.
+The browser smoke test requires access to the seven Google feeds. It checks month navigation, filtering, modal cancellation, export, mobile layout, and JavaScript errors using a device timezone outside the Philippines. Screenshots are written to the ignored test-results directory.
