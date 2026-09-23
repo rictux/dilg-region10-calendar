@@ -5,7 +5,7 @@ function manilaNow() {
 
 const DEFAULT_LINKS = [
   "https://calendar.google.com/calendar/embed?src=dilg.lgmed10%40gmail.com&ctz=Asia%2FManila",
-  "https://calendar.google.com/calendar/u/0/embed?src=rictu.dilg10@gmail.com&ctz=Asia%2FManila",
+  "https://calendar.google.com/calendar/u/0?cid=cmljdHUuZGlsZzEwQGdtYWlsLmNvbQ",
   "https://calendar.google.com/calendar/embed?src=rtenplanning%40gmail.com&ctz=Asia%2FManila",
   "https://calendar.google.com/calendar/embed?src=qmsec10dilg%40gmail.com&ctz=Asia%2FManila",
   "https://calendar.google.com/calendar/embed?src=region10personnel%40gmail.com&ctz=Asia%2FManila",
@@ -14,7 +14,7 @@ const DEFAULT_LINKS = [
 ];
 const DEFAULT_NAMES = [
   "LGMED",
-  "Shared regional calendar",
+  "RICTU",
   "Planning",
   "Quality Management",
   "Personnel",
