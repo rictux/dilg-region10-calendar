@@ -7,7 +7,7 @@ test("organization cards filter activities and preserve selection across views",
   await page.route("**/api/calendar-feed", route => {
     const { url } = route.request().postDataJSON();
     const events = url.includes("dilg.lgmed10") ? [
-      { id: "lgu", summary: "DILG LGU consultation", description: "Online consultation", location: "Google Meet" },
+      { id: "lgu", summary: "DILG LGU consultation", description: "Online consultation. Meeting ID: 123 456 7890. Passcode: abc123", location: "Google Meet" },
       { id: "nga", summary: "DILG NGA meeting", description: "Face-to-face meeting", location: "Conference room" },
     ].map(event => ({ ...event, calendarId: url, calendarName: "Test calendar", start: { dateTime: "2026-09-22T01:00:00Z" }, end: { dateTime: "2026-09-22T02:00:00Z" } })) : [];
     return route.fulfill({ json: { calendar: { id: url, summary: "Test calendar" }, events } });

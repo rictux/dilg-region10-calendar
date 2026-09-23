@@ -20,14 +20,26 @@ The seven supplied links are preloaded in `public/app.js`: LGMED 10, RICTU CALEN
 - The full current year loads once when the page opens or refreshes. Today, Month, and Year reuse that data without importing again. Navigating to a different year automatically loads its full year. Requests use Asia/Manila boundaries and are limited to 366 days, including leap years.
 - Recurring events, exceptions, moved instances, cancellations, and all-day dates are handled by node-ical.
 - Displayed dates and times use Asia/Manila, even on devices in other timezones.
-- Add calendar links edits the list, saved in this browser. The server does not persist links or event data.
+- Calendar links load automatically from the configured defaults or previously saved browser settings. The server does not persist links or event data.
 - Reloading the page retrieves updates. Partial failures stay visible; unavailable feeds are excluded from statistics and identified in exports.
 - Categories, delivery formats, stakeholders, and event levels are keyword-based estimates. Conflicts indicate overlapping timed entries, not confirmed attendee conflicts. Remaining capacity subtracts scheduled hours from eight hours; it does not calculate free time slots.
-- An event appearing on two calendars remains available under both filters and may count twice when both calendars are selected.
+- Possible duplicates across selected office calendars are consolidated using title, time, venue, facilitators, participants, and focal persons. Matches are estimates and are marked in the activity details; original calendar entries are unchanged.
+
+## Updated dashboard features
+
+Integrated from `calendar-activity-digest-source.zip`, retaining this project's Express/Vercel backend, recurrence expansion, default calendars, and Asia/Manila date handling.
+
+- Office tiles filter the agenda and analytics, alongside existing organization, delivery-format, and event-level filters.
+- Expanded activity details include focal persons, host agencies, staff, participant counts, description resource links, Meeting IDs, and passcodes.
+- Online classification requires both a Meeting ID and passcode/password. Hybrid additionally requires a physical venue or in-person indicator. A meeting link alone does not establish the delivery format.
+- Concurrent activity pairs identify shared facilitators or participants when available; time overlap alone does not confirm a personnel conflict.
+- The header action buttons (Download summary, Google sign-in, and Add calendar links) are removed; the dashboard loads its configured calendars automatically.
+
+The live smoke test requires at least one reachable calendar and permits partial availability. During the September 23, 2026 check, six feeds loaded; LGCDD's public feed was unavailable. Use an authorized Google account or a valid secret iCal link for calendars that are not public.
 
 Public links require calendars readable without authentication. Failed feeds are shown as unavailable, never as an empty schedule. Google sharing guidance: https://support.google.com/calendar/answer/37083
 
-## Optional Google sign-in
+## Google sign-in configuration (UI currently removed)
 
 Public calendars work without credentials. For Google account access, enable the Google Calendar API in Google Cloud, configure the OAuth consent screen and a Web application OAuth client, and add http://localhost:3000 (or the exact deployed origin) as an authorized JavaScript origin. Enter the client ID using Google sign-in. If the OAuth app is in testing, add the account as a test user. No client secret belongs in this app.
 
@@ -63,4 +75,4 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The browser smoke test requires access to the seven Google feeds. It checks month navigation, filtering, modal cancellation, export, mobile layout, and JavaScript errors using a device timezone outside the Philippines. Screenshots are written to the ignored test-results directory.
+The browser smoke test checks live Google feeds, month navigation, filtering, absence of the removed header buttons, mobile layout, and JavaScript errors using a device timezone outside the Philippines. Screenshots are written to the ignored test-results directory.

@@ -30,7 +30,7 @@ test("annual view loads the whole Manila year and navigates between years", asyn
   // All views within the loaded year reuse the initial seven feed requests.
   for (const view of ["Month", "Today", "Year", "Today", "Month", "Year"]) {
     await page.getByRole("button", { name: view, exact: true }).first().click();
-    await expect(page.locator("#linkBtn")).toHaveText("Add calendar links");
+    await expect(page.locator("#nextBtn")).toBeEnabled();
     expect(requests).toHaveLength(7);
   }
   await page.locator("#nextBtn").click();

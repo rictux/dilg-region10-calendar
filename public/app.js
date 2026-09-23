@@ -51,7 +51,11 @@ try {
     // The marker lets users remove it later without it reappearing on reload.
     for (const [key, calendarId, calendarLink] of [
       ["calendar_digest_pdmu_added", "dilg10pdmu@gmail.com", DEFAULT_LINKS[5]],
-      ["calendar_digest_lgcdd_added", "lgcdd10dilg@gmail.com", DEFAULT_LINKS[6]],
+      [
+        "calendar_digest_lgcdd_added",
+        "lgcdd10dilg@gmail.com",
+        DEFAULT_LINKS[6],
+      ],
     ]) {
       if (safeRead(key)) continue;
       const included = activeLinks.some((link) => {
@@ -59,13 +63,21 @@ try {
           const params = new URL(link).searchParams;
           const cid = params.get("cid") || "";
           const id = params.get("src") || (cid.includes("@") ? cid : atob(cid));
-          return id.toLowerCase() === calendarId || decodeURIComponent(link).toLowerCase().includes(`/${calendarId}/`);
-        } catch { return false; }
+          return (
+            id.toLowerCase() === calendarId ||
+            decodeURIComponent(link).toLowerCase().includes(`/${calendarId}/`)
+          );
+        } catch {
+          return false;
+        }
       });
       const canAdd = !included && activeLinks.length < 15;
       if (canAdd) activeLinks.push(calendarLink);
       if (included || canAdd) {
-        localStorage.setItem("calendar_digest_links", JSON.stringify(activeLinks));
+        localStorage.setItem(
+          "calendar_digest_links",
+          JSON.stringify(activeLinks),
+        );
         localStorage.setItem(key, "1");
       }
     }
@@ -99,6 +111,7 @@ const state = {
   source: "links",
   modeFilter: "all",
   scopeFilter: "all",
+  officeFilter: null,
   groupFilter: "all",
 };
 const $ = (id) => document.getElementById(id);
@@ -133,13 +146,56 @@ const eventEnd = (e) =>
 const isAllDay = (e) => !e.start.dateTime;
 const duration = (e) =>
   isAllDay(e) ? 0 : Math.max(0, (eventEnd(e) - eventDate(e)) / 36e5);
-const category=e=>{const s=(e.summary+' '+cleanDescription(e.description)).toLowerCase();if(/\b(training|workshop|seminar|webinar|orientation|learning session|capacity building)\b/.test(s))return'Training & Learning';if(/\b(monitoring|validation|inspection|assessment|audit|compliance check)\b/.test(s))return'Monitoring & Validation';if(/\b(technical assistance|coaching|mentoring|advisory support)\b/.test(s))return'Technical Assistance';if(/\b(consultation|dialogue|focus group|coordination|meeting|conference|call|huddle|committee)\b/.test(s))return'Meeting & Coordination';if(/\b(planning|review|evaluation|strategy|work plan)\b/.test(s))return'Planning & Review';if(/\b(field work|field visit|site visit|travel|deployment|onsite|on-site)\b/.test(s))return'Field Work & Visit';if(/\b(launch|ceremony|celebration|turnover|awarding|program)\b/.test(s))return'Program & Ceremony';if(/\b(report|administrative|documentation|procurement|deadline|submission|submit)\b/.test(s))return'Administrative';return'Other'};
+const category = (e) => {
+  const detail = cleanDescription(e.description)
+      .replace(/\btraining managers?[’']? checklist\b/gi, "")
+      .replace(/\blgrc activity tracker\b/gi, ""),
+    s = (e.summary + " " + detail).toLowerCase();
+  if (
+    /\b(training|workshop|seminar|webinar|orientation|learning session|capacity building)\b/.test(
+      s,
+    )
+  )
+    return "Training & Learning";
+  if (
+    /\b(monitoring|validation|inspection|assessment|audit|compliance check)\b/.test(
+      s,
+    )
+  )
+    return "Monitoring & Validation";
+  if (/\b(technical assistance|coaching|mentoring|advisory support)\b/.test(s))
+    return "Technical Assistance";
+  if (
+    /\b(consultation|dialogue|focus group|coordination|meeting|conference|call|huddle|committee)\b/.test(
+      s,
+    )
+  )
+    return "Meeting & Coordination";
+  if (/\b(planning|review|evaluation|strategy|work plan)\b/.test(s))
+    return "Planning & Review";
+  if (
+    /\b(field work|field visit|site visit|travel|deployment|onsite|on-site)\b/.test(
+      s,
+    )
+  )
+    return "Field Work & Visit";
+  if (/\b(launch|ceremony|celebration|turnover|awarding|program)\b/.test(s))
+    return "Program & Ceremony";
+  if (
+    /\b(report|administrative|documentation|procurement|deadline|submission|submit)\b/.test(
+      s,
+    )
+  )
+    return "Administrative";
+  return "Other";
+};
 const plainText = (html) => {
   const d = new DOMParser().parseFromString(html || "", "text/html");
   return (d.body.textContent || "").replace(/\s+/g, " ").trim();
 };
 function stakeholderCategories(e) {
-  if (e.sourceEvents) return [...new Set(e.sourceEvents.flatMap(stakeholderCategories))];
+  if (e.sourceEvents)
+    return [...new Set(e.sourceEvents.flatMap(stakeholderCategories))];
   const attendeeText = (e.attendees || [])
       .map((a) => (a.displayName || "") + " " + (a.email || ""))
       .join(" "),
@@ -218,115 +274,661 @@ function peopleInvolved(e) {
   return rows;
 }
 function expectedGuests(e) {
-  if (e.sourceEvents) return [...new Set(e.sourceEvents.flatMap(expectedGuests))];
+  if (e.sourceEvents)
+    return [...new Set(e.sourceEvents.flatMap(expectedGuests))];
   const text = plainText(e.description || ""),
     pattern =
-      /(?:^|[.!?]\s+)(expected guests?|guests?|participants?|attendees?|resource persons?|speakers?|officials involved|people involved)\s*[:\-]\s*([^.!?]+)/gi,
+      /\b(expected guests?|guests?|resource persons?|speakers?|officials involved)\s*[:\-]\s*([^.!?]+)/gi,
     found = [];
   let match;
   while ((match = pattern.exec(text))) found.push(match[2].trim());
   return found.slice(0, 4);
 }
-function descriptionBrief(e) {
-  const text = plainText(e.description || "");
-  if (!text) return "No activity description was provided.";
-  const sentence =
-    text.match(/^.{1,220}?(?:[.!?](?:\s|$)|$)/)?.[0] || text.slice(0, 220);
-  return sentence.length < text.length
-    ? sentence.trim() + "…"
-    : sentence.trim();
+function normalizeActivityUrl(value, depth = 0) {
+  let clean = String(value || "")
+    .replace(/&amp;/gi, "&")
+    .replace(/^[<(]+|[)>),.;]+$/g, "")
+    .trim();
+  if (!clean || /\bgoog_\d+\b/i.test(clean) || depth > 2) return "";
+  if (/^www\./i.test(clean)) clean = "https://" + clean;
+  try {
+    const url = new URL(clean);
+    if (
+      !/^https?:$/.test(url.protocol) ||
+      /\bgoog_\d+\b/i.test(decodeURIComponent(url.href))
+    )
+      return "";
+    if (
+      /(^|\.)google\.[a-z.]+$/i.test(url.hostname) &&
+      url.pathname === "/url"
+    ) {
+      const target = url.searchParams.get("q") || url.searchParams.get("url");
+      if (target) return normalizeActivityUrl(target, depth + 1);
+    }
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+function knownLinkLabel(text, url) {
+  const context = plainText(text || "").toLowerCase();
+  if (/training managers?[’']? checklist/.test(context))
+    return "Training Managers Checklist";
+  if (/\blgrc activity tracker\b/.test(context)) return "LGRC Activity Tracker";
+  const host = (() => {
+    try {
+      return new URL(url).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+  if (host.includes("meet.google")) return "Google Meet";
+  if (host.includes("zoom")) return "Zoom Meeting";
+  if (host.includes("teams.microsoft") || host.includes("teams.live"))
+    return "Microsoft Teams Meeting";
+  if (host.includes("webex")) return "Webex Meeting";
+  if (host.includes("docs.google") && /\/spreadsheets\//.test(url))
+    return "Google Sheet";
+  if (host.includes("docs.google") && /\/forms\//.test(url))
+    return "Google Form";
+  if (host.includes("docs.google")) return "Google Document";
+  if (host.includes("drive.google")) return "Google Drive File";
+  return "";
+}
+function isMeetingUrl(url, context = "") {
+  let host = "";
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {}
+  return (
+    /meet\.google|zoom\.|teams\.microsoft|teams\.live|webex/.test(host) ||
+    /\b(meeting link|join (?:the )?(?:meeting|zoom|google meet|teams|webex)|video conference)\b/i.test(
+      context,
+    )
+  );
+}
+function activityLinks(e) {
+  if (e.sourceEvents) {
+    const map = new Map();
+    e.sourceEvents.flatMap(activityLinks).forEach((x) => {
+      const old = map.get(x.url);
+      if (!old || /^Activity link$/i.test(old.label)) map.set(x.url, x);
+    });
+    return [...map.values()];
+  }
+  const raw = String(e.description || ""),
+    items = new Map(),
+    add = (value, label = "", context = "") => {
+      const url = normalizeActivityUrl(value);
+      if (!url) return;
+      const original = plainText(label).trim(),
+        informative =
+          original &&
+          !/^(?:click here|here|link|open|view|https?:|www\.)/i.test(
+            original,
+          ) &&
+          original.length <= 100,
+        known = knownLinkLabel((context || "") + " " + original, url),
+        explicitKnown = /training managers?[’']? checklist/i.test(original)
+          ? "Training Managers Checklist"
+          : /\blgrc activity tracker\b/i.test(original)
+            ? "LGRC Activity Tracker"
+            : "",
+        fallback = (() => {
+          try {
+            return new URL(url).hostname.replace(/^www\./, "");
+          } catch {
+            return "Activity link";
+          }
+        })(),
+        preferred =
+          explicitKnown ||
+          (/Checklist|Tracker/.test(known)
+            ? known
+            : informative
+              ? original
+              : known || fallback),
+        entry = {
+          url,
+          label: preferred,
+          kind: isMeetingUrl(url, (context || "") + " " + original)
+            ? "meeting"
+            : "resource",
+        };
+      const old = items.get(url);
+      if (
+        !old ||
+        (!old.label.includes("Checklist") &&
+          !old.label.includes("Tracker") &&
+          (known || informative))
+      )
+        items.set(url, entry);
+    };
+  const box = new DOMParser().parseFromString(raw, "text/html").body;
+  box
+    .querySelectorAll?.("a[href]")
+    .forEach((a) =>
+      add(
+        a.getAttribute("href"),
+        a.textContent,
+        a.parentElement?.textContent || "",
+      ),
+    );
+  [...raw.matchAll(/https?:\/\/[^\s<>"']+|www\.[^\s<>"']+/gi)].forEach((m) => {
+    const before = plainText(raw.slice(Math.max(0, m.index - 140), m.index)),
+      after = plainText(raw.slice(m.index, m.index + m[0].length + 80)),
+      tail = before
+        .split(/[.!?\n|]/)
+        .pop()
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+      labelMatch = tail.match(
+        /([A-Za-z][A-Za-z0-9 &'’()\/-]{2,70})\s*[:\-]?\s*$/,
+      );
+    add(m[0], labelMatch?.[1] || "", tail + " " + after);
+  });
+  return [...items.values()].slice(0, 8);
+}
+function meetingLinks(e) {
+  return activityLinks(e).filter((x) => x.kind === "meeting");
+}
+function descriptionWithBreaks(raw) {
+  const marker = " __CAL_BREAK__ ",
+    marked = String(raw || "").replace(/<br\s*\/?>|<\/p>|<\/div>/gi, marker),
+    text = plainText(marked);
+  return text.replaceAll("__CAL_BREAK__", "\n");
+}
+function meetingAccessDetails(e) {
+  if (e.sourceEvents) {
+    const map = new Map();
+    e.sourceEvents
+      .flatMap(meetingAccessDetails)
+      .forEach((x) =>
+        map.set(x.label.toLowerCase() + "|" + x.value.toLowerCase(), x),
+      );
+    return [...map.values()];
+  }
+  const text = descriptionWithBreaks(e.description),
+    out = [],
+    seen = new Set(),
+    add = (label, value) => {
+      const clean = String(value || "")
+        .trim()
+        .replace(/[),.;]+$/, "");
+      if (!clean) return;
+      const key = label.toLowerCase() + "|" + clean.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push({ label, value: clean });
+      }
+    };
+  let m;
+  const idPattern =
+      /\b(?:meeting\s*(?:id|number|no\.?|code)|webinar\s*id|conference\s*id)\s*[:#\-]?\s*([0-9](?:[0-9\s-]{4,30})[0-9])/gi,
+    passPattern =
+      /\b(?:pass\s*code|passcode|meeting\s*password|password|pwd|pin)\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9@#$%^&*+_.!\-]{1,39})/gi;
+  while ((m = idPattern.exec(text)))
+    add("Meeting ID", m[1].replace(/\s+/g, " ").trim());
+  while ((m = passPattern.exec(text))) add("Passcode", m[1]);
+  return out.slice(0, 6);
+}
+function meetingCredentials(e) {
+  const details = meetingAccessDetails(e);
+  return (
+    details.some((x) => x.label === "Meeting ID") &&
+    details.some((x) => x.label === "Passcode")
+  );
+}
+function participantCount(e) {
+  if (e.sourceEvents)
+    return Math.max(0, ...e.sourceEvents.map(participantCount));
+  const text = plainText(e.description || ""),
+    patterns = [
+      /(\d{1,5})\s*(?:pax|participants?|attendees?|delegates?)\b/gi,
+      /\bpax\s*[:\-]?\s*(\d{1,5})\b/gi,
+      /(?:number|no\.?)(?:\s+of)?\s+(?:participants?|attendees?)\s*[:\-]?\s*(\d{1,5})\b/gi,
+    ],
+    values = [];
+  patterns.forEach((p) => {
+    let m;
+    while ((m = p.exec(text))) values.push(Number(m[1]));
+  });
+  return values.length ? Math.max(...values) : 0;
+}
+function cleanDescription(raw) {
+  return plainText(
+    String(raw || "")
+      .replace(/<br\s*\/?>/gi, ". ")
+      .replace(/<\/p>/gi, ". "),
+  )
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(
+      /\b(?:meeting\s*(?:id|number|no\.?|code)|webinar\s*id|conference\s*id|pass\s*code|passcode|meeting password|password|pwd|access code|pin|dial[- ]?in|join (?:zoom|google meet|teams|the meeting))\s*[:\-]?\s*[^.!?]*/gi,
+      " ",
+    )
+    .replace(/\b\+?\d[\d ()-]{8,}\d\b/g, " ")
+    .replace(/\s+([,.;])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function cleanVenue(raw) {
+  let v = plainText(raw || "")
+    .replace(/^(?:venue|location|place|platform)\s*[:\-]\s*/i, "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!v) return "Not specified";
+  if (/zoom/i.test(v)) return "Zoom";
+  if (/google meet|meet\.google/i.test(v)) return "Google Meet";
+  if (/microsoft teams|teams\.microsoft/i.test(v)) return "Microsoft Teams";
+  if (/webex/i.test(v)) return "Webex";
+  v = v.split(/[|;]/)[0].trim();
+  if (v.includes(",")) v = v.split(",")[0].trim();
+  return v || "Not specified";
+}
+function platformFromLink(value) {
+  const url = typeof value === "string" ? value : value?.url;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (host.includes("zoom")) return "Zoom";
+    if (host.includes("meet.google")) return "Google Meet";
+    if (host.includes("teams.microsoft") || host.includes("teams.live"))
+      return "Microsoft Teams";
+    if (host.includes("webex")) return "Webex";
+    return "Online meeting";
+  } catch {
+    return "Online meeting";
+  }
 }
 function venueOf(e) {
-  const direct = plainText(e.location || "");
-  if (direct) return direct;
-  const text = plainText(e.description || ""),
+  const direct = cleanVenue(e.location);
+  if (direct !== "Not specified") return direct;
+  const text = cleanDescription(e.description),
     match = text.match(
-      /(?:^|[.!?]\s+)(?:venue|location|place|platform)\s*[:\-]\s*([^.!?]+)/i,
+      /\b(?:venue|location|place|platform)\s*[:\-]\s*([^.!?]+)/i,
     );
-  if (match) return match[1].trim();
-  const url =
-    e.hangoutLink ||
-    e.conferenceData?.entryPoints?.find((x) => x.entryPointType === "video")
-      ?.uri;
-  if (url) {
-    try {
-      return new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-      return "Online";
-    }
-  }
-  return "Not specified";
+  if (match) return cleanVenue(match[1]);
+  const links = meetingLinks(e);
+  if (meetingCredentials(e) && links.length) return platformFromLink(links[0]);
+  return meetingCredentials(e) ? "Online meeting" : "Not specified";
 }
 function deliveryMode(e) {
   const text = (
       " " +
-      [
-        e.summary,
-        e.description,
-        e.location,
-        e.hangoutLink,
-        JSON.stringify(e.conferenceData || {}),
-      ]
-        .filter(Boolean)
-        .join(" ") +
+      [e.summary, e.description, e.location].filter(Boolean).join(" ") +
       " "
     ).toLowerCase(),
-    online =
-      /\b(online|virtual|zoom|google meet|meet\.google|microsoft teams|teams\.microsoft|webex|webinar|teleconference|video call)\b/i.test(
+    completeAccess = meetingCredentials(e),
+    explicitHybrid =
+      /\b(hybrid|blended|onsite\s+and\s+online|face[- ]to[- ]face\s+and\s+online)\b/i.test(
         text,
       ),
-    onsite =
-      /\b(face[- ]to[- ]face|in[- ]person|on[- ]site|onsite|hotel|function room|conference (?:room|hall|center)|training (?:room|center)|regional office|provincial office|city hall|municipal hall|barangay hall)\b/i.test(
+    onsiteWords =
+      /\b(f2f|face[- ]to[- ]face|in[- ]person|on[- ]site|onsite|physical attendance|hotel|function room|conference (?:room|hall|center)|training (?:room|center)|regional office|provincial office|city hall|municipal hall|barangay hall)\b/i.test(
         text,
-      );
-  return online && onsite
-    ? "Hybrid"
-    : online
-      ? "Online"
-      : onsite || venueOf(e) !== "Not specified"
-        ? "Face-to-face"
-        : "Unspecified";
-}
-function eventLevel(e) {
-  const text = (
-    " " +
-    [e.summary, e.description, e.location, e.calendarName]
-      .filter(Boolean)
-      .join(" ") +
-    " "
-  ).toLowerCase();
-  if (
-    /\b(field office|field personnel|provincial office|provincial director|huc|city office|city director|municipal|mlgoo|clgoo|lgoo|barangay|fou)\b/i.test(
-      text,
-    )
-  )
-    return "Field Office";
-  if (
-    /\b(regional|region x|region 10|regional office|regional director|ord|oard|lgmed|lgcdd|rictu)\b/i.test(
-      text,
-    )
-  )
-    return "Regional";
+      ),
+    venue = venueOf(e),
+    physicalVenue =
+      venue !== "Not specified" &&
+      ![
+        "Zoom",
+        "Google Meet",
+        "Microsoft Teams",
+        "Webex",
+        "Online meeting",
+      ].includes(venue),
+    onsite = onsiteWords || physicalVenue;
+  if (completeAccess && (explicitHybrid || onsite)) return "Hybrid";
+  if (completeAccess) return "Online";
+  if (onsite) return "Face-to-face";
   return "Unspecified";
 }
-function cleanDescription(raw){return plainText(String(raw||'').replace(/<br\s*\/?>/gi,'. ').replace(/<\/p>/gi,'. ')).replace(/https?:\/\/\S+/gi,' ').replace(/\b(?:meeting id|meeting code|passcode|password|dial[- ]?in|join (?:zoom|google meet|teams|the meeting))\s*[:\-]?\s*[^.!?]*/gi,' ').replace(/\b\+?\d[\d ()-]{8,}\d\b/g,' ').replace(/\s+([,.;])/g,'$1').replace(/\s+/g,' ').trim()}
-
-const normWords=value=>new Set(String(value||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>2&&!['the','and','for','with','from','this','that','activity','event','calendar','schedule'].includes(w)));
-function setSimilarity(a,b){if(!a.size||!b.size)return 0;let common=0;a.forEach(x=>{if(b.has(x))common++});return common/(a.size+b.size-common)}
-const textSimilarity=(a,b)=>setSimilarity(normWords(a),normWords(b));
-const normalizedName=value=>String(value||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
-function labeledNames(e,labels){const text=cleanDescription(e.description),pattern=new RegExp('(?:^|[.!?]\\s+)('+labels+')\\s*[:\\-]\\s*([^.!?]+)','gi'),out=[];let m;while((m=pattern.exec(text)))m[2].split(/,|;|\band\b/i).map(x=>x.trim()).filter(x=>x&&x.length<80).forEach(x=>out.push(x));return out}
-function facilitators(e){if(e.facilitatorNames)return e.facilitatorNames;return[...new Set([e.organizer?.displayName||e.organizer?.email,...labeledNames(e,'facilitators?|resource persons?|speakers?|trainers?|presenters?')].filter(Boolean).map(x=>normalizedName(x)))]}
-function participants(e){if(e.sourceEvents)return[...new Set(e.sourceEvents.flatMap(participants))];return[...new Set([...(e.attendees||[]).map(a=>a.displayName||a.email),...labeledNames(e,'participants?|attendees?|expected guests?|guests?|delegates?')].filter(Boolean).map(x=>normalizedName(x)))]}
-function nameOverlap(a,b){const A=new Set(a),B=new Set(b);if(!A.size||!B.size)return 0;let n=0;A.forEach(x=>{if(B.has(x))n++});return n/Math.min(A.size,B.size)}
-function officeName(value){return String(value||'Unknown office').replace(/\s+(calendar|activities|events|schedule)$/i,'').trim()||'Unknown office'}
-function duplicateScore(a,b){if(a.calendarId===b.calendarId||localKey(eventDate(a))!==localKey(eventDate(b)))return 0;const title=textSimilarity(a.summary,b.summary),startGap=Math.abs(eventDate(a)-eventDate(b))/6e4,time=startGap<=15?1:startGap<=60?0.65:(eventDate(a)<eventEnd(b)&&eventDate(b)<eventEnd(a)?0.4:0),venue=textSimilarity(venueOf(a),venueOf(b)),fac=nameOverlap(facilitators(a),facilitators(b)),part=nameOverlap(participants(a),participants(b));if(title<.35||!time)return 0;return title*.48+time*.2+venue*.1+fac*.12+part*.1}
-function mergeGroup(group){
-  const best=[...group].sort((a,b)=>(cleanDescription(b.description).length+(b.summary||'').length)-(cleanDescription(a.description).length+(a.summary||'').length))[0],attendees=[],seenPeople=new Set();group.flatMap(e=>e.attendees||[]).forEach(a=>{const k=normalizedName(a.email||a.displayName);if(k&&!seenPeople.has(k)){seenPeople.add(k);attendees.push(a)}});const offices=[...new Set(group.map(e=>officeName(e.calendarName)))],locations=group.map(venueOf).filter(v=>v!=='Not specified'),location=locations.sort((a,b)=>locations.filter(x=>x===b).length-locations.filter(x=>x===a).length)[0]||'';
-  return{...best,id:'merged-'+group.map(e=>e.id).sort().join('-'),summary:best.summary,description:best.description,location,start:group.reduce((x,e)=>eventDate(e)<eventDate(x)?e:x,group[0]).start,end:group.reduce((x,e)=>eventEnd(e)>eventEnd(x)?e:x,group[0]).end,attendees,facilitatorNames:[...new Set(group.flatMap(facilitators))],calendarIds:[...new Set(group.map(e=>e.calendarId))],offices,calendarName:offices.join(', '),sourceEvents:group,sourceCount:group.length,mergedCount:group.length-1};
+function eventLevel(e) {
+  const title = (" " + (e.summary || "") + " ").toLowerCase(),
+    detail = (
+      " " +
+      [e.description, e.location].filter(Boolean).join(" ") +
+      " "
+    ).toLowerCase(),
+    origin = (" " + (e.calendarName || "") + " ").toLowerCase(),
+    regional =
+      /\b(regional|region x|region 10|regional director|ord|oard|lgmed|lgcdd|rictu)\b/i,
+    field =
+      /\b(field office|field personnel|provincial office|provincial director|huc|city office|city director|municipal|mlgoo|clgoo|lgoo|barangay|fou)\b/i;
+  if (regional.test(title)) return "Regional";
+  if (field.test(title)) return "Field Office";
+  if (regional.test(detail)) return "Regional";
+  if (field.test(detail)) return "Field Office";
+  if (regional.test(origin)) return "Regional";
+  if (field.test(origin)) return "Field Office";
+  return "Unspecified";
 }
-function mergeDuplicateActivities(events){const n=events.length,parent=Array.from({length:n},(_,i)=>i),find=x=>parent[x]===x?x:(parent[x]=find(parent[x])),join=(a,b)=>{a=find(a);b=find(b);if(a!==b)parent[b]=a},sorted=events.map((e,i)=>({e,i})).sort((a,b)=>eventDate(a.e)-eventDate(b.e));for(let x=0;x<sorted.length;x++)for(let y=x+1;y<sorted.length;y++){if(localKey(eventDate(sorted[x].e))!==localKey(eventDate(sorted[y].e)))break;const score=duplicateScore(sorted[x].e,sorted[y].e),title=textSimilarity(sorted[x].e.summary,sorted[y].e.summary);if(score>=.64||(score>=.55&&title>=.78))join(sorted[x].i,sorted[y].i)}const groups=new Map();events.forEach((e,i)=>{const r=find(i);if(!groups.has(r))groups.set(r,[]);groups.get(r).push(e)});return[...groups.values()].map(mergeGroup).sort((a,b)=>eventDate(a)-eventDate(b))}
-
+const normWords = (value) =>
+  new Set(
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(
+        (w) =>
+          w.length > 2 &&
+          ![
+            "the",
+            "and",
+            "for",
+            "with",
+            "from",
+            "this",
+            "that",
+            "activity",
+            "event",
+            "calendar",
+            "schedule",
+          ].includes(w),
+      ),
+  );
+function setSimilarity(a, b) {
+  if (!a.size || !b.size) return 0;
+  let common = 0;
+  a.forEach((x) => {
+    if (b.has(x)) common++;
+  });
+  return common / (a.size + b.size - common);
+}
+const textSimilarity = (a, b) => setSimilarity(normWords(a), normWords(b));
+const normalizedName = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+function labeledNames(e, labels) {
+  const text = cleanDescription(e.description),
+    pattern = new RegExp("\\b(" + labels + ")\\s*[:\\-]\\s*([^.!?]+)", "gi"),
+    out = [];
+  let m;
+  while ((m = pattern.exec(text)))
+    m[2]
+      .split(/,|;|\band\b/i)
+      .map((x) => x.replace(/\s*[|/]\s*(?:\+?\d|\S+@).*$/, "").trim())
+      .filter(
+        (x) =>
+          x &&
+          x.length < 80 &&
+          !/^\d+\s*(?:pax|participants?|attendees?)?$/i.test(x),
+      )
+      .forEach((x) => out.push(x));
+  return out;
+}
+function facilitators(e) {
+  if (e.facilitatorNames) return e.facilitatorNames;
+  return [
+    ...new Set(
+      [
+        e.organizer?.displayName || e.organizer?.email,
+        ...labeledNames(
+          e,
+          "facilitators?|resource persons?|speakers?|trainers?|presenters?",
+        ),
+      ]
+        .filter(Boolean)
+        .map((x) => normalizedName(x)),
+    ),
+  ];
+}
+function participants(e) {
+  if (e.sourceEvents) return [...new Set(e.sourceEvents.flatMap(participants))];
+  return [
+    ...new Set(
+      [
+        ...(e.attendees || []).map((a) => a.displayName || a.email),
+        ...labeledNames(
+          e,
+          "participants?|attendees?|expected guests?|guests?|delegates?|pax",
+        ),
+      ]
+        .filter(Boolean)
+        .map((x) => normalizedName(x)),
+    ),
+  ];
+}
+function contactPersons(e) {
+  if (e.sourceEvents)
+    return [...new Set(e.sourceEvents.flatMap(contactPersons))];
+  return [
+    ...new Set(
+      labeledNames(
+        e,
+        "activity focal(?: person)?|focal person|contact person|point person|activity coordinator|coordinator|secretariat",
+      )
+        .map(normalizedName)
+        .filter(Boolean),
+    ),
+  ];
+}
+function uniqueLabels(values) {
+  const map = new Map();
+  values.filter(Boolean).forEach((x) => {
+    const value = String(x).trim(),
+      key = normalizedName(value);
+    if (key && !map.has(key)) map.set(key, value);
+  });
+  return [...map.values()];
+}
+function hostAgencies(e) {
+  if (e.sourceEvents) return uniqueLabels(e.sourceEvents.flatMap(hostAgencies));
+  return uniqueLabels(
+    labeledNames(
+      e,
+      "host agency|host office|hosting agency|organizing agency|lead agency|convenor",
+    ),
+  );
+}
+function staffInvolved(e) {
+  if (e.sourceEvents)
+    return uniqueLabels(e.sourceEvents.flatMap(staffInvolved));
+  return uniqueLabels(
+    labeledNames(
+      e,
+      "staff involved|personnel involved|dilg staff involved|assigned staff|team members",
+    ),
+  );
+}
+const humanName = (value) =>
+  String(value || "").replace(/\b\w/g, (c) => c.toUpperCase());
+function nameOverlap(a, b) {
+  const A = new Set(a),
+    B = new Set(b);
+  if (!A.size || !B.size) return 0;
+  let n = 0;
+  A.forEach((x) => {
+    if (B.has(x)) n++;
+  });
+  return n / Math.min(A.size, B.size);
+}
+function officeName(value) {
+  let name = String(value || "Unknown office").trim();
+  if (/^[^@\s]+@[^@\s]+$/.test(name))
+    name = name.split("@")[0].replace(/[._-]+/g, " ");
+  return (
+    name
+      .replace(/\s+(calendar|activities|events|schedule)$/i, "")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim() || "Unknown Office"
+  );
+}
+function sourceOffice(e) {
+  return officeName(e.calendarName || e.calendarOwner || e.calendarId);
+}
+function duplicateScore(a, b) {
+  if (
+    a.calendarId === b.calendarId ||
+    localKey(eventDate(a)) !== localKey(eventDate(b))
+  )
+    return 0;
+  const title = textSimilarity(a.summary, b.summary),
+    startGap = Math.abs(eventDate(a) - eventDate(b)) / 6e4,
+    time =
+      startGap <= 15
+        ? 1
+        : startGap <= 60
+          ? 0.65
+          : eventDate(a) < eventEnd(b) && eventDate(b) < eventEnd(a)
+            ? 0.4
+            : 0,
+    venue = textSimilarity(venueOf(a), venueOf(b)),
+    fac = nameOverlap(facilitators(a), facilitators(b)),
+    part = nameOverlap(participants(a), participants(b)),
+    contact = nameOverlap(contactPersons(a), contactPersons(b));
+  if (title < 0.35 || !time) return 0;
+  return (
+    title * 0.44 +
+    time * 0.18 +
+    venue * 0.1 +
+    fac * 0.1 +
+    part * 0.1 +
+    contact * 0.08
+  );
+}
+function mergeGroup(group) {
+  const best = [...group].sort(
+      (a, b) =>
+        cleanDescription(b.description).length +
+        (b.summary || "").length -
+        (cleanDescription(a.description).length + (a.summary || "").length),
+    )[0],
+    attendees = [],
+    seenPeople = new Set();
+  group
+    .flatMap((e) => e.attendees || [])
+    .forEach((a) => {
+      const k = normalizedName(a.email || a.displayName);
+      if (k && !seenPeople.has(k)) {
+        seenPeople.add(k);
+        attendees.push(a);
+      }
+    });
+  const offices = [...new Set(group.map(sourceOffice))],
+    locations = group.map(venueOf).filter((v) => v !== "Not specified"),
+    location =
+      locations.sort(
+        (a, b) =>
+          locations.filter((x) => x === b).length -
+          locations.filter((x) => x === a).length,
+      )[0] || "";
+  return {
+    ...best,
+    id:
+      "merged-" +
+      group
+        .map((e) => e.id)
+        .sort()
+        .join("-"),
+    summary: best.summary,
+    description: best.description,
+    location,
+    start: group.reduce(
+      (x, e) => (eventDate(e) < eventDate(x) ? e : x),
+      group[0],
+    ).start,
+    end: group.reduce((x, e) => (eventEnd(e) > eventEnd(x) ? e : x), group[0])
+      .end,
+    attendees,
+    facilitatorNames: [...new Set(group.flatMap(facilitators))],
+    calendarIds: [...new Set(group.map((e) => e.calendarId))],
+    offices,
+    calendarName: offices.join(", "),
+    sourceEvents: group,
+    sourceCount: group.length,
+    mergedCount: group.length - 1,
+  };
+}
+function mergeDuplicateActivities(events) {
+  const n = events.length,
+    parent = Array.from({ length: n }, (_, i) => i),
+    find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x]))),
+    join = (a, b) => {
+      a = find(a);
+      b = find(b);
+      if (a !== b) parent[b] = a;
+    },
+    sorted = events
+      .map((e, i) => ({ e, i }))
+      .sort((a, b) => eventDate(a.e) - eventDate(b.e));
+  for (let x = 0; x < sorted.length; x++)
+    for (let y = x + 1; y < sorted.length; y++) {
+      if (localKey(eventDate(sorted[x].e)) !== localKey(eventDate(sorted[y].e)))
+        break;
+      const score = duplicateScore(sorted[x].e, sorted[y].e),
+        title = textSimilarity(sorted[x].e.summary, sorted[y].e.summary);
+      if (score >= 0.64 || (score >= 0.55 && title >= 0.78))
+        join(sorted[x].i, sorted[y].i);
+    }
+  const groups = new Map();
+  events.forEach((e, i) => {
+    const r = find(i);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(e);
+  });
+  return [...groups.values()]
+    .map(mergeGroup)
+    .sort((a, b) => eventDate(a) - eventDate(b));
+}
+function activitySummary(e) {
+  const mode = deliveryMode(e),
+    venue = venueOf(e),
+    level = eventLevel(e),
+    groups = stakeholderCategories(e).filter(
+      (x) => x !== "Other / Unspecified",
+    ),
+    title = String(e.summary || "Activity").trim(),
+    leads = facilitators(e).slice(0, 2).map(humanName),
+    contacts = contactPersons(e).slice(0, 2).map(humanName),
+    hosts = hostAgencies(e),
+    staff = staffInvolved(e),
+    people = participants(e),
+    pax = participantCount(e),
+    resources = activityLinks(e).filter((x) => x.kind === "resource"),
+    access = meetingAccessDetails(e),
+    completeAccess = meetingCredentials(e),
+    formatText =
+      mode === "Unspecified"
+        ? "has no stated delivery format"
+        : `will be conducted ${mode === "Face-to-face" ? "face-to-face" : mode.toLowerCase()}`;
+  const parts = [
+    `${title} is classified as ${category(e).toLowerCase()} and ${formatText}${level !== "Unspecified" ? " at the " + level.toLowerCase() + " level" : ""}.`,
+  ];
+  if (venue !== "Not specified")
+    parts.push(`${mode === "Online" ? "Platform" : "Venue"}: ${venue}.`);
+  if (hosts.length) parts.push(`Host agency: ${hosts.slice(0, 3).join(", ")}.`);
+  if (groups.length)
+    parts.push(`Stakeholders identified: ${groups.slice(0, 4).join(", ")}.`);
+  if (leads.length) parts.push(`Led or organized by ${leads.join(" and ")}.`);
+  if (contacts.length)
+    parts.push(`Activity focal or contact: ${contacts.join(" and ")}.`);
+  if (staff.length)
+    parts.push(`Staff involved: ${staff.slice(0, 5).join(", ")}.`);
+  if (pax) parts.push(`Indicated participation: ${pax} pax.`);
+  else if (people.length)
+    parts.push(
+      `${people.length} named ${people.length === 1 ? "participant or guest is" : "participants or guests are"} associated with the activity.`,
+    );
+  if (completeAccess)
+    parts.push("A complete Meeting ID and passcode are provided.");
+  else if (access.length)
+    parts.push(
+      "Only partial meeting credentials were found, so they were not used to classify this activity as online or hybrid.",
+    );
+  if (resources.length)
+    parts.push(
+      `Activity resources available: ${resources
+        .slice(0, 3)
+        .map((x) => x.label)
+        .join(", ")}.`,
+    );
+  return parts.join(" ");
+}
 function findConflicts(ev) {
   const timed = ev.filter((e) => !isAllDay(e)),
     pairs = [];
@@ -335,19 +937,40 @@ function findConflicts(ev) {
       const a = timed[i],
         b = timed[j];
       if (eventDate(a) < eventEnd(b) && eventDate(b) < eventEnd(a)) {
-        const start = new Date(Math.max(eventDate(a), eventDate(b))),
+        const sharedFac = facilitators(a).filter((x) =>
+            facilitators(b).includes(x),
+          ),
+          sharedPart = participants(a).filter((x) =>
+            participants(b).includes(x),
+          ),
+          start = new Date(Math.max(eventDate(a), eventDate(b))),
           end = new Date(Math.min(eventEnd(a), eventEnd(b)));
-        pairs.push({ a, b, start, end });
+        pairs.push({
+          a,
+          b,
+          start,
+          end,
+          sharedFac,
+          sharedPart,
+          basis: sharedFac.length
+            ? "Shared facilitator"
+            : sharedPart.length
+              ? "Shared participant"
+              : "Time overlap",
+        });
       }
     }
   return pairs;
 }
+
 function range() {
   if (state.view === "day")
     return [startOfDay(state.cursor), endOfDay(state.cursor)];
   if (state.view === "year")
-    return [new Date(Date.UTC(state.cursor.getUTCFullYear(), 0, 1)),
-      new Date(Date.UTC(state.cursor.getUTCFullYear() + 1, 0, 1) - 1)];
+    return [
+      new Date(Date.UTC(state.cursor.getUTCFullYear(), 0, 1)),
+      new Date(Date.UTC(state.cursor.getUTCFullYear() + 1, 0, 1) - 1),
+    ];
   const a = new Date(
       Date.UTC(state.cursor.getUTCFullYear(), state.cursor.getUTCMonth(), 1),
     ),
@@ -364,17 +987,27 @@ function range() {
     );
   return [a, b];
 }
-function currentEvents({ ignoreGroup = false } = {}) {
+function currentEvents({ ignoreGroup = false, ignoreOffice = false } = {}) {
   const [a, b] = range();
   // Filter source calendars first so excluded offices cannot affect merged totals.
-  const reports = state.events.filter(e =>
-    state.selected.has(e.calendarId) && eventDate(e) <= b &&
-    eventEnd(e) > a && e.status !== "cancelled");
-  return mergeDuplicateActivities(reports).filter(e =>
-    (state.modeFilter === "all" || deliveryMode(e) === state.modeFilter) &&
-    (state.scopeFilter === "all" || eventLevel(e) === state.scopeFilter) &&
-    (ignoreGroup || state.groupFilter === "all" || stakeholderCategories(e).includes(state.groupFilter)));
-
+  const reports = state.events.filter(
+    (e) =>
+      state.selected.has(e.calendarId) &&
+      eventDate(e) <= b &&
+      eventEnd(e) > a &&
+      e.status !== "cancelled",
+  );
+  return mergeDuplicateActivities(reports).filter(
+    (e) =>
+      (state.modeFilter === "all" || deliveryMode(e) === state.modeFilter) &&
+      (state.scopeFilter === "all" || eventLevel(e) === state.scopeFilter) &&
+      (ignoreOffice ||
+        !state.officeFilter ||
+        e.offices.includes(state.officeFilter)) &&
+      (ignoreGroup ||
+        state.groupFilter === "all" ||
+        stakeholderCategories(e).includes(state.groupFilter)),
+  );
 }
 function render() {
   const ev = currentEvents(),
@@ -383,11 +1016,17 @@ function render() {
     hours = ev.reduce((n, e) => n + duration(e), 0),
     conflicts = findConflicts(ev);
   $("pageTitle").textContent =
-    state.view === "day" ? "Today’s activity" : state.view === "year" ? "Annual activity summary" : "Monthly activity";
+    state.view === "day"
+      ? "Today’s activity"
+      : state.view === "year"
+        ? "Annual activity summary"
+        : "Monthly activity";
   $("subtitle").textContent =
     state.view === "day"
       ? "A clear view of where your day is going."
-      : state.view === "year" ? "Activities and analytics for the entire year." : "Patterns and scheduled workload at a glance.";
+      : state.view === "year"
+        ? "Activities and analytics for the entire year."
+        : "Patterns and scheduled workload at a glance.";
   $("periodTitle").textContent =
     state.view === "day"
       ? fmtDate(a, {
@@ -396,9 +1035,17 @@ function render() {
           day: "numeric",
           year: "numeric",
         })
-      : fmtDate(a, state.view === "year" ? { year: "numeric" } : { month: "long", year: "numeric" });
+      : fmtDate(
+          a,
+          state.view === "year"
+            ? { year: "numeric" }
+            : { month: "long", year: "numeric" },
+        );
   $("metricEvents").textContent = ev.length;
-  $("metricMerged").textContent = ev.reduce((total, e) => total + e.mergedCount, 0);
+  $("metricMerged").textContent = ev.reduce(
+    (total, e) => total + e.mergedCount,
+    0,
+  );
   $("metricOffices").textContent = unique;
   $("metricConcurrent").textContent = conflicts.length;
   $("metricEventsNote").textContent = "unique activities after consolidation";
@@ -408,6 +1055,7 @@ function render() {
   renderSummary(ev, hours, conflicts);
   renderBreakdown(ev);
   renderAnalytics(ev);
+  renderOfficeTiles(currentEvents({ ignoreOffice: true }));
   renderStakeholders(currentEvents({ ignoreGroup: true }));
   renderConflicts(conflicts);
   renderSuggestions(ev, conflicts);
@@ -438,7 +1086,11 @@ function localKey(d) {
 }
 function renderSummary(ev, hours, conflicts) {
   $("summaryMode").textContent =
-    state.view === "day" ? "Daily digest" : state.view === "year" ? "Annual digest" : "Monthly digest";
+    state.view === "day"
+      ? "Daily digest"
+      : state.view === "year"
+        ? "Annual digest"
+        : "Monthly digest";
   const cats = ev.reduce(
       (o, e) => ((o[category(e)] = (o[category(e)] || 0) + 1), o),
       {},
@@ -458,7 +1110,10 @@ function renderSummary(ev, hours, conflicts) {
       : `This ${state.view === "year" ? "year" : "month"} contains ${ev.length} scheduled ${ev.length === 1 ? "activity" : "activities"} across ${new Set(ev.flatMap((e) => e.offices)).size} reporting offices.`;
   const bits = [];
   const merged = ev.reduce((total, e) => total + e.mergedCount, 0);
-  if (merged) bits.push(`<b>${merged} duplicate office ${merged === 1 ? "entry was" : "entries were"} merged</b> into the consolidated activity count.`);
+  if (merged)
+    bits.push(
+      `<b>${merged} duplicate office ${merged === 1 ? "entry was" : "entries were"} merged</b> into the consolidated activity count.`,
+    );
   if (conflicts.length)
     bits.push(
       `<b>${conflicts.length} possible ${conflicts.length === 1 ? "conflict" : "conflicts"}</b> detected from overlapping timed activities.`,
@@ -491,7 +1146,10 @@ function renderSummary(ev, hours, conflicts) {
       return counts;
     }, {});
     const peak = Object.entries(months).sort((a, b) => b[1] - a[1])[0];
-    if (peak) bits.unshift(`<b>${esc(peak[0])}</b> has the highest activity count at ${peak[1]}.`);
+    if (peak)
+      bits.unshift(
+        `<b>${esc(peak[0])}</b> has the highest activity count at ${peak[1]}.`,
+      );
   } else if (state.view === "month") {
     const best = Object.entries(byDay(ev)).sort((a, b) => b[1] - a[1])[0];
     if (best)
@@ -517,7 +1175,6 @@ function renderSummary(ev, hours, conflicts) {
         `<div class="insight"><span class="bullet"></span><span>${x}</span></div>`,
     )
     .join("");
-
 }
 function renderBreakdown(ev) {
   const counts = ev.reduce(
@@ -553,17 +1210,61 @@ function renderAnalytics(ev) {
       k,
       ev.filter((e) => eventLevel(e) === k).length,
     ]),
-    venues = Object.entries(
-      ev.reduce((o, e) => {
-        const v = venueOf(e);
-        o[v] = (o[v] || 0) + 1;
-        return o;
-      }, {}),
+    venueMap = new Map();
+  ev.forEach((e) => {
+    const v = venueOf(e);
+    if (
+      v === "Not specified" ||
+      [
+        "Zoom",
+        "Google Meet",
+        "Microsoft Teams",
+        "Webex",
+        "Online",
+        "Online meeting",
+      ].includes(v)
     )
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+      return;
+    if (!venueMap.has(v)) venueMap.set(v, { count: 0, offices: new Set() });
+    const row = venueMap.get(v);
+    row.count++;
+    e.offices.forEach((o) => row.offices.add(o));
+  });
+  const venues = [...venueMap.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 5);
   $("analytics").innerHTML =
-    `<section class="analytics-block"><h3>Delivery format</h3>${analyticRows(modes, ev.length)}</section><section class="analytics-block"><h3>Event level</h3>${analyticRows(levels, ev.length)}</section><section class="analytics-block"><h3>Most-used venues</h3>${venues.length ? venues.map(([v, n]) => `<div class="venue-row"><b title="${esc(v)}">${esc(v)}</b><span>${n} ${n === 1 ? "activity" : "activities"}</span></div>`).join("") : '<div class="empty"><strong>No venue data</strong></div>'}</section>`;
+    `<section class="analytics-block"><h3>Delivery format</h3>${analyticRows(modes, ev.length)}</section><section class="analytics-block"><h3>Event level</h3>${analyticRows(levels, ev.length)}</section><section class="analytics-block"><h3>Most-used physical venues</h3>${venues.length ? venues.map(([v, row]) => `<div class="venue-row"><b title="${esc(v)}">${esc(v)}</b><span>${row.count} ${row.count === 1 ? "activity" : "activities"} · ${row.offices.size} ${row.offices.size === 1 ? "office" : "offices"}</span></div>`).join("") : '<div class="empty"><strong>No physical venue data</strong></div>'}</section>`;
+}
+function renderOfficeTiles(ev) {
+  const counts = ev
+    .flatMap((e) => e.offices)
+    .reduce((o, k) => ((o[k] = (o[k] || 0) + 1), o), Object.create(null));
+  // Keep the selected office available to clear even when other filters hide it.
+  if (state.officeFilter && !counts[state.officeFilter])
+    counts[state.officeFilter] = 0;
+  const items = Object.entries(counts).sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  $("officeTiles").innerHTML =
+    items
+      .map(
+        ([name, count]) =>
+          `<button class="office-box ${state.officeFilter === name ? "active" : ""}" aria-pressed="${state.officeFilter === name}" data-office="${esc(name)}" title="Filter activities from ${esc(name)}"><strong>${count}</strong><span>${esc(name)}</span></button>`,
+      )
+      .join("") ||
+    '<div class="empty"><strong>No office activity found</strong>The originating calendar determines the office or division.</div>';
+  document.querySelectorAll("[data-office]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        const office = b.dataset.office;
+        state.officeFilter = state.officeFilter === office ? null : office;
+        render();
+        [...$("officeTiles").querySelectorAll("[data-office]")]
+          .find((item) => item.dataset.office === office)
+          ?.focus();
+      }),
+  );
 }
 function renderStakeholders(ev) {
   const order = [
@@ -587,9 +1288,10 @@ function renderStakeholders(ev) {
           `<button type="button" class="stake-box" data-group="${esc(k)}" aria-pressed="${state.groupFilter === k}"><strong>${counts[k] || 0}</strong><span>${esc(k)}</span></button>`,
       )
       .join("");
-  $("groupFilterStatus").textContent = state.groupFilter === "all"
-    ? "Select a group to filter activities. Activities may belong to several groups."
-    : `Filtering by ${state.groupFilter}. Select it again or All groups to clear.`;
+  $("groupFilterStatus").textContent =
+    state.groupFilter === "all"
+      ? "Select a group to filter activities. Activities may belong to several groups."
+      : `Filtering by ${state.groupFilter}. Select it again or All groups to clear.`;
 }
 $("stakeholders").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-group]");
@@ -599,20 +1301,23 @@ $("stakeholders").addEventListener("click", (event) => {
   render();
   // Rendering replaces the cards; keep focus on the activated control.
   [...$("stakeholders").querySelectorAll("[data-group]")]
-    .find((item) => item.dataset.group === group)?.focus();
+    .find((item) => item.dataset.group === group)
+    ?.focus();
 });
 function renderConflicts(pairs) {
   $("conflictCount").textContent = pairs.length
-    ? `${pairs.length} detected`
-    : "No overlaps";
+    ? `${pairs.length} concurrent pairs`
+    : "No concurrent activities";
   $("conflicts").innerHTML = pairs.length
     ? pairs
-        .map(
-          (x) =>
-            `<div class="conflict-item"><span class="conflict-time">${fmtDate(x.start, { month: "short", day: "numeric" })}<br>${fmtDate(x.start, { hour: "numeric", minute: "2-digit" })}–${fmtDate(x.end, { hour: "numeric", minute: "2-digit" })}</span><div class="conflict-pair"><strong>${esc(x.a.summary)} ↔ ${esc(x.b.summary)}</strong>${esc(x.a.calendarName)} and ${esc(x.b.calendarName)}</div><span class="conflict-badge">Overlapping</span></div>`,
-        )
+        .map((x) => {
+          const shared = [...x.sharedFac, ...x.sharedPart]
+            .slice(0, 3)
+            .join(", ");
+          return `<div class="conflict-item"><span class="conflict-time">${fmtDate(x.start, { month: "short", day: "numeric" })}<br>${fmtDate(x.start, { hour: "numeric", minute: "2-digit" })}–${fmtDate(x.end, { hour: "numeric", minute: "2-digit" })}</span><div class="conflict-pair"><strong>${esc(x.a.summary)} ↔ ${esc(x.b.summary)}</strong>${esc(x.a.offices.join(", "))} and ${esc(x.b.offices.join(", "))}${shared ? ` · Shared: ${esc(shared)}` : ""}</div><span class="conflict-badge">${esc(x.basis)}</span></div>`;
+        })
         .join("")
-    : '<div class="empty"><strong>No schedule conflicts detected</strong>Timed activities do not overlap in this period.</div>';
+    : '<div class="empty"><strong>No concurrent activities</strong>No different activities run at overlapping times in this period.</div>';
 }
 function renderSuggestions(ev, conflicts) {
   const items = [],
@@ -693,7 +1398,11 @@ function renderSuggestions(ev, conflicts) {
 }
 function renderAgenda(ev) {
   $("agendaTitle").textContent =
-    state.view === "day" ? "Daily activities" : state.view === "year" ? "All annual activities" : "All monthly activities";
+    state.view === "day"
+      ? "Daily activities"
+      : state.view === "year"
+        ? "All annual activities"
+        : "All monthly activities";
   $("agendaCount").textContent =
     ev.length + " " + (ev.length === 1 ? "activity" : "activities");
   if (!ev.length) {
@@ -723,6 +1432,12 @@ function eventRow(e) {
     people = peopleInvolved(e),
     guests = expectedGuests(e),
     groups = stakeholderCategories(e),
+    contacts = contactPersons(e).map(humanName),
+    hosts = hostAgencies(e),
+    staff = staffInvolved(e),
+    links = activityLinks(e),
+    access = meetingAccessDetails(e),
+    pax = participantCount(e),
     accepted = people.filter((p) => p.status === "accepted").length,
     pending = people.filter((p) => p.status === "needsAction").length,
     mode = deliveryMode(e),
@@ -737,12 +1452,25 @@ function eventRow(e) {
             ? "hybrid"
             : "";
   const peopleText = people.length
-    ? people
-        .slice(0, 8)
-        .map((p) => `${esc(p.name)}${p.role ? " (" + esc(p.role) + ")" : ""}`)
-        .join(", ")
-    : "No attendee list is available.";
-  return `<details class="event-wrap"><summary class="event"><span class="event-color" style="background:${esc(e.color || cal?.backgroundColor || "#1b3b2f")}"></span><span class="event-time">${time}</span><div><div class="event-title">${esc(e.summary || "(No title)")}</div><div class="event-meta">${esc(e.calendarName)} · ${esc(venue)}${people.length ? " · " + people.length + " people" : ""}</div></div><span class="event-badges"><span class="pill ${modeClass}">${esc(mode)}</span><span class="pill">${esc(level)}</span></span></summary><div class="event-extra"><p><strong>Activity summary:</strong> ${esc(descriptionBrief(e))}</p><p><strong>Venue/platform:</strong> ${esc(venue)} · <strong>Format:</strong> ${esc(mode)} · <strong>Event level:</strong> ${esc(level)}</p><p><strong>People involved:</strong> ${peopleText}${accepted || pending ? ` · ${accepted} accepted${pending ? ", " + pending + " awaiting response" : ""}` : ""}</p>${guests.length ? `<p><strong>Expected guests:</strong> ${guests.map(esc).join("; ")}</p>` : ""}<div class="event-tags"><span class="tag">${esc(category(e))}</span>${groups.map((g) => `<span class="tag">${esc(g)}</span>`).join("")}</div></div></details>`;
+      ? people
+          .slice(0, 8)
+          .map((p) => `${esc(p.name)}${p.role ? " (" + esc(p.role) + ")" : ""}`)
+          .join(", ")
+      : "No named attendee list is available.",
+    linksHtml = links
+      .map((link) => {
+        let domain = "";
+        try {
+          domain = new URL(link.url).hostname.replace(/^www\./, "");
+        } catch {}
+        return `<div class="detail-link"><a href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">${esc(link.label)}</a>${domain ? `<small>${esc(domain)}</small>` : ""}</div>`;
+      })
+      .join(""),
+    accessText = access
+      .map((x) => `<strong>${esc(x.label)}:</strong> ${esc(x.value)}`)
+      .join(" · "),
+    completeAccess = meetingCredentials(e);
+  return `<details class="event-wrap"><summary class="event"><span class="event-color" style="background:${esc(e.color || cal?.backgroundColor || "#3777d6")}"></span><span class="event-time">${time}</span><div><div class="event-title">${esc(e.summary || "(No title)")}</div><div class="event-meta">${esc(e.offices.join(", "))} · ${esc(venue)}${e.mergedCount ? ` · Possible duplicate across ${e.sourceCount} office calendars` : ""}</div></div><span class="event-badges"><span class="pill ${modeClass}">${esc(mode)}</span><span class="pill">${esc(level)}</span>${e.mergedCount ? '<span class="pill duplicate">Possible duplicate</span>' : ""}</span></summary><div class="event-extra"><p><strong>Activity analysis:</strong> ${esc(activitySummary(e))}</p><p><strong>Originating division/office${e.offices.length === 1 ? "" : "s"}:</strong> ${esc(e.offices.join(", "))}</p>${e.mergedCount ? `<p><strong>Possible duplicate match:</strong> ${e.sourceCount} entries from different office calendars appear to refer to the same activity and are displayed once.</p>` : ""}<p><strong>Venue/platform:</strong> ${esc(venue)} · <strong>Format:</strong> ${esc(mode)} · <strong>Event level:</strong> ${esc(level)}</p>${hosts.length ? `<p><strong>Host agency:</strong> ${esc(hosts.join(", "))}</p>` : ""}<p><strong>Facilitator${facilitators(e).length === 1 ? "" : "s"}:</strong> ${facilitators(e).length ? esc(facilitators(e).map(humanName).join(", ")) : "Not specified"}</p>${contacts.length ? `<p><strong>Activity focal/contact:</strong> ${esc(contacts.join(", "))}</p>` : ""}${staff.length ? `<p><strong>Staff involved:</strong> ${esc(staff.join(", "))}</p>` : ""}<p><strong>Participants:</strong> ${pax ? `${pax} pax indicated · ` : ""}${peopleText}${accepted || pending ? ` · ${accepted} accepted${pending ? ", " + pending + " awaiting response" : ""}` : ""}</p>${guests.length ? `<p><strong>Expected guests:</strong> ${guests.map(esc).join("; ")}</p>` : ""}${accessText ? `<p><strong>${completeAccess ? "Meeting access" : "Meeting access (incomplete)"}:</strong> ${accessText}${completeAccess ? "" : " · Not used for online/hybrid classification"}</p>` : ""}${linksHtml ? `<p><strong>Activity links:</strong></p><div class="detail-links">${linksHtml}</div>` : ""}<div class="event-tags"><span class="tag">${esc(category(e))}</span>${groups.map((g) => `<span class="tag">${esc(g)}</span>`).join("")}${e.mergedCount ? '<span class="tag duplicate">Possible duplicate activity</span>' : ""}</div></div></details>`;
 }
 function renderCalendarMenu() {
   $("calendarList").innerHTML = state.calendars
@@ -764,7 +1492,8 @@ function renderCalendarMenu() {
         renderCalendarMenu();
         // Keep keyboard focus on the checkbox after rebuilding its label.
         [...document.querySelectorAll("[data-cal]")]
-          .find((input) => input.dataset.cal === el.dataset.cal)?.focus();
+          .find((input) => input.dataset.cal === el.dataset.cal)
+          ?.focus();
         render();
       }),
   );
@@ -775,11 +1504,7 @@ function openLinksDialog() {
   $("linksDialog").showModal();
 }
 function setLinkLoading(on) {
-  $("linkBtn").disabled = on;
   $("importLinksBtn").disabled = on;
-  $("linkBtn").innerHTML = on
-    ? '<span class="loading"></span> Importing…'
-    : "Add calendar links";
   $("importLinksBtn").innerHTML = on
     ? '<span class="loading"></span> Importing…'
     : "Import calendars";
@@ -959,7 +1684,6 @@ $("todayBtn").onclick = () => {
   state.cursor = manilaNow();
   refreshPeriod();
 };
-$("linkBtn").onclick = openLinksDialog;
 $("modeFilter").onchange = (e) => {
   state.modeFilter = e.target.value;
   render();
@@ -1009,6 +1733,7 @@ $("linksForm").onsubmit = async (e) => {
   const complete = await loadLinkedCalendars(links);
   if (complete) $("linksDialog").close();
 };
+
 
 function requestRange() {
   const year = state.cursor.getUTCFullYear();

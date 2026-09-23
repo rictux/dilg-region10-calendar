@@ -1,32 +1,32 @@
 import { test, expect } from "@playwright/test";
 
-test("live calendars, navigation, modal and responsive layout", async ({
+test("live calendars, navigation and responsive layout", async ({
   page,
 }) => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await expect(page.locator("#sideStatus")).toHaveText(
-    "7 of 7 calendars loaded",
+    /^[1-7] of 7 calendars loaded$/,
     { timeout: 45000 },
+  );
+  const loadedCount = Number(
+    (await page.locator("#sideStatus").textContent()).split(" ")[0],
   );
   await expect(page.locator(".source-card")).toHaveCount(0);
   await page.getByRole("button", { name: "Month", exact: true }).click();
   await expect(page.locator("#pageTitle")).toHaveText("Monthly activity");
-  await page.locator("#linkBtn").click();
-  await expect(page.locator("#calendarLinks")).toHaveValue(/dilg.lgmed10/);
-  await page
-    .locator("#linksDialog")
-    .getByRole("button", { name: "Cancel" })
-    .click();
-  await expect(page.locator("#linksDialog")).not.toBeVisible();
   await page.locator("#calFilter").click();
-  await expect(page.locator("#calendarList input")).toHaveCount(7);
+  await expect(page.locator("#calendarList input")).toHaveCount(loadedCount);
   await page.locator("#calendarList input").first().uncheck();
-  await expect(page.locator("#calFilter")).toHaveText("6 selected ▾");
+  await expect(page.locator("#calFilter")).toHaveText(
+    `${loadedCount - 1} selected ▾`,
+  );
   await page.keyboard.press("Escape");
-  await expect(page.locator("#exportBtn, #connectBtn")).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Overlapping conflicts", exact: true })).toBeVisible();
+  await expect(page.locator("#exportBtn, #connectBtn, #linkBtn")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Overlapping conflicts", exact: true }),
+  ).toBeVisible();
   await page.screenshot({ path: "test-results/desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("#pageTitle")).toBeVisible();
@@ -59,5 +59,5 @@ test("failed feeds show unavailable data rather than an empty schedule", async (
   await expect(page.locator("#agenda")).toContainText(
     "Calendar data unavailable",
   );
-  await expect(page.locator("#exportBtn")).toHaveCount(0);
+  await expect(page.locator("#exportBtn, #connectBtn, #linkBtn")).toHaveCount(0);
 });

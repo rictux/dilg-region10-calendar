@@ -1125,3 +1125,22 @@ button, input, select, textarea {
     grid-template-columns: 1fr;
   }
 }
+
+/* Office filters and resource links from the updated dashboard. */
+.office-tiles { padding: 1px 20px 20px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; }
+.office-box { background: #f3f7fa; border: 1px solid transparent; border-radius: 10px; padding: 13px; text-align: left; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.office-box:hover { border-color: #aac9dc; }
+.office-box.active { background: #e5f1fb; border-color: #6ca4cd; }
+.office-box strong { display: block; font-size: 24px; font-weight: 700; }
+.office-box span { display: block; font-size: 12px; color: var(--muted); }
+.detail-links { display: grid; gap: 6px; margin-bottom: 9px; }
+.detail-link { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px; min-width: 0; }
+.detail-link a { overflow-wrap: anywhere; }
+.detail-link small { color: var(--muted); overflow-wrap: anywhere; }
+.pill.duplicate, .tag.duplicate { background: #fff3dc; color: #8a5a12; border-color: #efcf91; }
+@media (max-width: 1100px) { .office-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 680px) {
+  .office-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .actions { flex-wrap: wrap; }
+  .actions .btn { width: auto; }
+}
