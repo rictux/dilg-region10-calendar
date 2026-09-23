@@ -25,7 +25,7 @@ test("live calendars, navigation and responsive layout", async ({
   await page.keyboard.press("Escape");
   await expect(page.locator("#exportBtn, #connectBtn, #linkBtn")).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Overlapping conflicts", exact: true }),
+    page.getByRole("heading", { name: "Concurrent activities", exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: "test-results/desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
