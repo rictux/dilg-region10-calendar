@@ -5,7 +5,7 @@ function manilaNow() {
 
 const DEFAULT_LINKS = [
   "https://calendar.google.com/calendar/embed?src=dilg.lgmed10%40gmail.com&ctz=Asia%2FManila",
-  "https://calendar.google.com/calendar/u/0?cid=NDAyOTBiNjJjOTkyNWYzYjhlMGNlMTMzOTEyMDY1NjRiZWVhMWU0MTc2MDRlYjVkODNlNmIzNWRiYWI5OTFmM0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
+  "https://calendar.google.com/calendar/u/0/embed?src=rictu.dilg10@gmail.com&ctz=Asia%2FManila",
   "https://calendar.google.com/calendar/embed?src=rtenplanning%40gmail.com&ctz=Asia%2FManila",
   "https://calendar.google.com/calendar/embed?src=qmsec10dilg%40gmail.com&ctz=Asia%2FManila",
   "https://calendar.google.com/calendar/embed?src=region10personnel%40gmail.com&ctz=Asia%2FManila",
