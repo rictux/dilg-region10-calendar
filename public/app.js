@@ -91,13 +91,18 @@ let sourceResults = [],
   requestVersion = 0,
   loadedPeriod = "";
 const COLORS = [
-  "#e96b3e",
-  "#4c78a8",
-  "#d7a640",
-  "#6f967f",
-  "#9b6da9",
-  "#bd6b77",
-  "#527b70",
+  "#2563EB",
+  "#EA580C",
+  "#15803D",
+  "#7E22CE",
+  "#BE123C",
+  "#A16207",
+  "#0F766E",
+  "#DB2777",
+  "#374151",
+  "#0891B2",
+  "#4D7C0F",
+  "#7C2D12",
 ];
 const state = {
   view: "day",
@@ -135,6 +140,18 @@ const esc = (s) =>
         c
       ],
   );
+const hexRgba = (hex, alpha) => {
+  const value = String(hex || "").replace("#", ""),
+    full =
+      value.length === 3
+        ? value
+            .split("")
+            .map((x) => x + x)
+            .join("")
+        : value;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return `rgba(55,119,214,${alpha})`;
+  return `rgba(${parseInt(full.slice(0, 2), 16)},${parseInt(full.slice(2, 4), 16)},${parseInt(full.slice(4, 6), 16)},${alpha})`;
+};
 const eventDate = (e) =>
   e.start.dateTime
     ? new Date(Date.parse(e.start.dateTime) + 8 * 3600000)
@@ -761,6 +778,28 @@ function officeName(value) {
 function sourceOffice(e) {
   return officeName(e.calendarName || e.calendarOwner || e.calendarId);
 }
+function officeColorById(id) {
+  return state.calendars.find((c) => c.id === id)?.backgroundColor || COLORS[0];
+}
+function officeColorByName(name) {
+  return (
+    state.calendars.find((c) => officeName(c.summary) === name)
+      ?.backgroundColor || COLORS[0]
+  );
+}
+function eventOfficeColors(e) {
+  return [...new Set((e.calendarIds || [e.calendarId]).map(officeColorById))];
+}
+function officeRowBackground(colors) {
+  const list = colors.length ? colors : [COLORS[0]];
+  if (list.length === 1) return hexRgba(list[0], 0.12);
+  const size = 100 / list.length,
+    stops = list.flatMap((color, index) => [
+      `${hexRgba(color, 0.13)} ${(index * size).toFixed(2)}%`,
+      `${hexRgba(color, 0.13)} ${((index + 1) * size).toFixed(2)}%`,
+    ]);
+  return `linear-gradient(90deg,${stops.join(",")})`;
+}
 function duplicateScore(a, b) {
   if (
     a.calendarId === b.calendarId ||
@@ -963,7 +1002,19 @@ function findConflicts(ev) {
   return pairs;
 }
 
+function startOfWeek(d) {
+  const start = startOfDay(d);
+  start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+  return start;
+}
+function endOfWeek(d) {
+  const end = startOfWeek(d);
+  end.setUTCDate(end.getUTCDate() + 6);
+  return endOfDay(end);
+}
 function range() {
+  if (state.view === "week")
+    return [startOfWeek(state.cursor), endOfWeek(state.cursor)];
   if (state.view === "day")
     return [startOfDay(state.cursor), endOfDay(state.cursor)];
   if (state.view === "year")
@@ -1011,48 +1062,50 @@ function currentEvents({ ignoreGroup = false, ignoreOffice = false } = {}) {
 }
 function render() {
   const ev = currentEvents(),
-    [a] = range(),
+    [a, b] = range(),
     unique = new Set(ev.flatMap((e) => e.offices)).size,
-    hours = ev.reduce((n, e) => n + duration(e), 0),
     conflicts = findConflicts(ev);
   $("pageTitle").textContent =
     state.view === "day"
       ? "Today’s activity"
-      : state.view === "year"
-        ? "Annual activity summary"
-        : "Monthly activity";
+      : state.view === "week"
+        ? "Weekly activity"
+        : state.view === "year"
+          ? "Annual activity summary"
+          : "Monthly activity";
   $("subtitle").textContent =
     state.view === "day"
       ? "A clear view of where your day is going."
-      : state.view === "year"
-        ? "Activities and analytics for the entire year."
-        : "Patterns and scheduled workload at a glance.";
+      : state.view === "week"
+        ? "Activities and analytics for the selected week."
+        : state.view === "year"
+          ? "Activities and analytics for the entire year."
+          : "Patterns and scheduled workload at a glance.";
   $("periodTitle").textContent =
-    state.view === "day"
-      ? fmtDate(a, {
-          weekday: "short",
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })
-      : fmtDate(
-          a,
-          state.view === "year"
-            ? { year: "numeric" }
-            : { month: "long", year: "numeric" },
-        );
+    state.view === "week"
+      ? `${fmtDate(a, { month: "short", day: "numeric", year: "numeric" })} – ${fmtDate(b, { month: "short", day: "numeric", year: "numeric" })}`
+      : state.view === "day"
+        ? fmtDate(a, {
+            weekday: "short",
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })
+        : fmtDate(
+            a,
+            state.view === "year"
+              ? { year: "numeric" }
+              : { month: "long", year: "numeric" },
+          );
   $("metricEvents").textContent = ev.length;
-  $("metricMerged").textContent = ev.reduce(
-    (total, e) => total + e.mergedCount,
-    0,
-  );
+  $("metricMerged").textContent = ev.filter((e) => e.mergedCount > 0).length;
   $("metricOffices").textContent = unique;
   $("metricConcurrent").textContent = conflicts.length;
   $("metricEventsNote").textContent = "unique activities after consolidation";
   $("metricFourthLabel").textContent = "Categories";
   $("metricFourth").textContent = new Set(ev.map(category)).size;
   $("metricFourthNote").textContent = "activity categories represented";
-  renderSummary(ev, hours, conflicts);
+  renderSummary(ev, conflicts, ev.filter((e) => e.mergedCount > 0).length);
   renderBreakdown(ev);
   renderAnalytics(ev);
   renderOfficeTiles(currentEvents({ ignoreOffice: true }));
@@ -1084,13 +1137,15 @@ function localKey(d) {
     String(d.getUTCDate()).padStart(2, "0")
   );
 }
-function renderSummary(ev, hours, conflicts) {
+function renderSummary(ev, concurrent, duplicates) {
   $("summaryMode").textContent =
     state.view === "day"
-      ? "Daily digest"
-      : state.view === "year"
-        ? "Annual digest"
-        : "Monthly digest";
+      ? "Daily summary"
+      : state.view === "week"
+        ? "Weekly summary"
+        : state.view === "month"
+          ? "Monthly summary"
+          : "Annual summary";
   const cats = ev.reduce(
       (o, e) => ((o[category(e)] = (o[category(e)] || 0) + 1), o),
       {},
@@ -1099,28 +1154,34 @@ function renderSummary(ev, hours, conflicts) {
     allDay = ev.filter(isAllDay).length;
   if (!ev.length) {
     $("summaryLead").textContent =
-      "No activities are scheduled for this period.";
+      "No activities were found for this period and filter set.";
     $("insights").innerHTML =
-      '<div class="insight"><span class="bullet"></span><span>This period is open. Adjust the calendar filter if you expected to see an activity.</span></div>';
+      '<div class="insight"><span class="bullet"></span><span>Adjust the office, format, event-level, or organization filter to widen the results.</span></div>';
     return;
   }
+  const officeCount = new Set(ev.flatMap((e) => e.offices)).size,
+    period =
+      state.view === "day"
+        ? "today"
+        : state.view === "week"
+          ? "this week"
+          : state.view === "month"
+            ? "this month"
+            : "this year";
   $("summaryLead").textContent =
-    state.view === "day"
-      ? `You have ${ev.length} ${ev.length === 1 ? "activity" : "activities"} scheduled, accounting for ${formatHours(hours)} of timed work.`
-      : `This ${state.view === "year" ? "year" : "month"} contains ${ev.length} scheduled ${ev.length === 1 ? "activity" : "activities"} across ${new Set(ev.flatMap((e) => e.offices)).size} reporting offices.`;
+    `${ev.length} unique ${ev.length === 1 ? "activity" : "activities"} ${period} across ${officeCount} reporting ${officeCount === 1 ? "office" : "offices"}.`;
   const bits = [];
-  const merged = ev.reduce((total, e) => total + e.mergedCount, 0);
-  if (merged)
+  if (duplicates)
     bits.push(
-      `<b>${merged} duplicate office ${merged === 1 ? "entry was" : "entries were"} merged</b> into the consolidated activity count.`,
+      `<b>${duplicates} ${duplicates === 1 ? "activity has" : "activities have"} possible duplicate entries</b> from different office calendars and ${duplicates === 1 ? "is" : "are"} shown once.`,
     );
-  if (conflicts.length)
+  if (concurrent.length)
     bits.push(
-      `<b>${conflicts.length} possible ${conflicts.length === 1 ? "conflict" : "conflicts"}</b> detected from overlapping timed activities.`,
+      `<b>${concurrent.length} concurrent ${concurrent.length === 1 ? "pair is" : "pairs are"} running at overlapping times</b>${concurrent.some((x) => x.sharedFac.length || x.sharedPart.length) ? ", including shared facilitators or participants." : "."}`,
     );
   if (top)
     bits.push(
-      `<b>${esc(top[0])}</b> is the largest activity category with ${top[1]} ${top[1] === 1 ? "entry" : "entries"}.`,
+      `<b>${esc(top[0])}</b> is the largest activity category with ${top[1]} ${top[1] === 1 ? "activity" : "activities"}.`,
     );
   const stakeholders = ev
       .flatMap(stakeholderCategories)
@@ -1132,41 +1193,27 @@ function renderSummary(ev, hours, conflicts) {
     bits.push(
       `<b>${esc(topStake[0])}</b> is the most frequently involved stakeholder group, appearing in ${topStake[1]} activities.`,
     );
-  const longest = ev
-    .filter((e) => !isAllDay(e))
-    .sort((a, b) => duration(b) - duration(a))[0];
-  if (longest)
-    bits.push(
-      `The longest scheduled activity is <b>${esc(longest.summary)}</b> at ${formatHours(duration(longest))}.`,
-    );
   if (state.view === "year") {
-    const months = ev.reduce((counts, e) => {
-      const month = fmtDate(eventDate(e), { month: "long" });
-      counts[month] = (counts[month] || 0) + 1;
-      return counts;
-    }, {});
-    const peak = Object.entries(months).sort((a, b) => b[1] - a[1])[0];
+    const months = ev.reduce((o, e) => {
+        const k = fmtDate(eventDate(e), { month: "long" });
+        o[k] = (o[k] || 0) + 1;
+        return o;
+      }, {}),
+      peak = Object.entries(months).sort((a, b) => b[1] - a[1])[0];
     if (peak)
-      bits.unshift(
+      bits.push(
         `<b>${esc(peak[0])}</b> has the highest activity count at ${peak[1]}.`,
       );
-  } else if (state.view === "month") {
+  } else if (state.view === "month" || state.view === "week") {
     const best = Object.entries(byDay(ev)).sort((a, b) => b[1] - a[1])[0];
     if (best)
       bits.push(
         `<b>${fmtDate(new Date(best[0] + "T00:00:00Z"), { weekday: "long", month: "long", day: "numeric" })}</b> is the busiest day with ${best[1]} activities.`,
       );
-  } else if (hours > 8)
-    bits.push(
-      `The day is scheduled <b>${formatHours(hours - 8)} beyond</b> an 8-hour workday.`,
-    );
-  else
-    bits.push(
-      `<b>${formatHours(Math.max(0, 8 - hours))}</b> of an 8-hour workday remains after subtracting scheduled hours; overlapping activities are counted separately.`,
-    );
+  }
   if (allDay)
     bits.push(
-      `${allDay} all-day ${allDay === 1 ? "activity is" : "activities are"} included but excluded from scheduled-hour totals.`,
+      `${allDay} all-day ${allDay === 1 ? "activity is" : "activities are"} included.`,
     );
   $("insights").innerHTML = bits
     .slice(0, 3)
@@ -1250,7 +1297,7 @@ function renderOfficeTiles(ev) {
     items
       .map(
         ([name, count]) =>
-          `<button class="office-box ${state.officeFilter === name ? "active" : ""}" aria-pressed="${state.officeFilter === name}" data-office="${esc(name)}" title="Filter activities from ${esc(name)}"><strong>${count}</strong><span>${esc(name)}</span></button>`,
+          `<button class="office-box ${state.officeFilter === name ? "active" : ""}" aria-pressed="${state.officeFilter === name}" data-office="${esc(name)}" style="--office-color:${officeColorByName(name)};--office-tint:${hexRgba(officeColorByName(name), 0.11)};--office-border:${hexRgba(officeColorByName(name), 0.32)};--office-ring:${hexRgba(officeColorByName(name), 0.16)}" title="Filter activities from ${esc(name)}"><strong>${count}</strong><span>${esc(name)}</span></button>`,
       )
       .join("") ||
     '<div class="empty"><strong>No office activity found</strong>The originating calendar determines the office or division.</div>';
@@ -1400,9 +1447,11 @@ function renderAgenda(ev) {
   $("agendaTitle").textContent =
     state.view === "day"
       ? "Daily activities"
-      : state.view === "year"
-        ? "All annual activities"
-        : "All monthly activities";
+      : state.view === "week"
+        ? "All weekly activities"
+        : state.view === "year"
+          ? "All annual activities"
+          : "All monthly activities";
   $("agendaCount").textContent =
     ev.length + " " + (ev.length === 1 ? "activity" : "activities");
   if (!ev.length) {
@@ -1423,8 +1472,7 @@ function renderAgenda(ev) {
     .join("");
 }
 function eventRow(e) {
-  const cal = state.calendars.find((c) => c.id === e.calendarId),
-    time = isAllDay(e)
+  const time = isAllDay(e)
       ? "All day"
       : fmtDate(eventDate(e), { hour: "numeric", minute: "2-digit" }) +
         "–" +
@@ -1450,7 +1498,10 @@ function eventRow(e) {
           ? "onsite"
           : mode === "Hybrid"
             ? "hybrid"
-            : "";
+            : "",
+    officeColors = eventOfficeColors(e),
+    primaryColor = officeColors[0],
+    rowBackground = officeRowBackground(officeColors);
   const peopleText = people.length
       ? people
           .slice(0, 8)
@@ -1470,7 +1521,7 @@ function eventRow(e) {
       .map((x) => `<strong>${esc(x.label)}:</strong> ${esc(x.value)}`)
       .join(" · "),
     completeAccess = meetingCredentials(e);
-  return `<details class="event-wrap"><summary class="event"><span class="event-color" style="background:${esc(e.color || cal?.backgroundColor || "#3777d6")}"></span><span class="event-time">${time}</span><div><div class="event-title">${esc(e.summary || "(No title)")}</div><div class="event-meta">${esc(e.offices.join(", "))} · ${esc(venue)}${e.mergedCount ? ` · Possible duplicate across ${e.sourceCount} office calendars` : ""}</div></div><span class="event-badges"><span class="pill ${modeClass}">${esc(mode)}</span><span class="pill">${esc(level)}</span>${e.mergedCount ? '<span class="pill duplicate">Possible duplicate</span>' : ""}</span></summary><div class="event-extra"><p><strong>Activity analysis:</strong> ${esc(activitySummary(e))}</p><p><strong>Originating division/office${e.offices.length === 1 ? "" : "s"}:</strong> ${esc(e.offices.join(", "))}</p>${e.mergedCount ? `<p><strong>Possible duplicate match:</strong> ${e.sourceCount} entries from different office calendars appear to refer to the same activity and are displayed once.</p>` : ""}<p><strong>Venue/platform:</strong> ${esc(venue)} · <strong>Format:</strong> ${esc(mode)} · <strong>Event level:</strong> ${esc(level)}</p>${hosts.length ? `<p><strong>Host agency:</strong> ${esc(hosts.join(", "))}</p>` : ""}<p><strong>Facilitator${facilitators(e).length === 1 ? "" : "s"}:</strong> ${facilitators(e).length ? esc(facilitators(e).map(humanName).join(", ")) : "Not specified"}</p>${contacts.length ? `<p><strong>Activity focal/contact:</strong> ${esc(contacts.join(", "))}</p>` : ""}${staff.length ? `<p><strong>Staff involved:</strong> ${esc(staff.join(", "))}</p>` : ""}<p><strong>Participants:</strong> ${pax ? `${pax} pax indicated · ` : ""}${peopleText}${accepted || pending ? ` · ${accepted} accepted${pending ? ", " + pending + " awaiting response" : ""}` : ""}</p>${guests.length ? `<p><strong>Expected guests:</strong> ${guests.map(esc).join("; ")}</p>` : ""}${accessText ? `<p><strong>${completeAccess ? "Meeting access" : "Meeting access (incomplete)"}:</strong> ${accessText}${completeAccess ? "" : " · Not used for online/hybrid classification"}</p>` : ""}${linksHtml ? `<p><strong>Activity links:</strong></p><div class="detail-links">${linksHtml}</div>` : ""}<div class="event-tags"><span class="tag">${esc(category(e))}</span>${groups.map((g) => `<span class="tag">${esc(g)}</span>`).join("")}${e.mergedCount ? '<span class="tag duplicate">Possible duplicate activity</span>' : ""}</div></div></details>`;
+  return `<details class="event-wrap" style="--office-color:${primaryColor};--office-border:${hexRgba(primaryColor, 0.34)}"><summary class="event" style="background:${rowBackground}"><span class="event-time">${time}</span><div><div class="event-title">${esc(e.summary || "(No title)")}</div><div class="event-meta">${esc(e.offices.join(", "))} · ${esc(venue)}${e.mergedCount ? ` · Possible duplicate across ${e.sourceCount} office calendars` : ""}</div></div><span class="event-badges"><span class="pill ${modeClass}">${esc(mode)}</span><span class="pill">${esc(level)}</span>${e.mergedCount ? '<span class="pill duplicate">Possible duplicate</span>' : ""}</span></summary><div class="event-extra"><p><strong>Activity analysis:</strong> ${esc(activitySummary(e))}</p><p><strong>Originating division/office${e.offices.length === 1 ? "" : "s"}:</strong> ${esc(e.offices.join(", "))}</p>${e.mergedCount ? `<p><strong>Possible duplicate match:</strong> ${e.sourceCount} entries from different office calendars appear to refer to the same activity and are displayed once.</p>` : ""}<p><strong>Venue/platform:</strong> ${esc(venue)} · <strong>Format:</strong> ${esc(mode)} · <strong>Event level:</strong> ${esc(level)}</p>${hosts.length ? `<p><strong>Host agency:</strong> ${esc(hosts.join(", "))}</p>` : ""}<p><strong>Facilitator${facilitators(e).length === 1 ? "" : "s"}:</strong> ${facilitators(e).length ? esc(facilitators(e).map(humanName).join(", ")) : "Not specified"}</p>${contacts.length ? `<p><strong>Activity focal/contact:</strong> ${esc(contacts.join(", "))}</p>` : ""}${staff.length ? `<p><strong>Staff involved:</strong> ${esc(staff.join(", "))}</p>` : ""}<p><strong>Participants:</strong> ${pax ? `${pax} pax indicated · ` : ""}${peopleText}${accepted || pending ? ` · ${accepted} accepted${pending ? ", " + pending + " awaiting response" : ""}` : ""}</p>${guests.length ? `<p><strong>Expected guests:</strong> ${guests.map(esc).join("; ")}</p>` : ""}${accessText ? `<p><strong>${completeAccess ? "Meeting access" : "Meeting access (incomplete)"}:</strong> ${accessText}${completeAccess ? "" : " · Not used for online/hybrid classification"}</p>` : ""}${linksHtml ? `<p><strong>Activity links:</strong></p><div class="detail-links">${linksHtml}</div>` : ""}<div class="event-tags"><span class="tag">${esc(category(e))}</span>${groups.map((g) => `<span class="tag">${esc(g)}</span>`).join("")}${e.mergedCount ? '<span class="tag duplicate">Possible duplicate activity</span>' : ""}</div></div></details>`;
 }
 function renderCalendarMenu() {
   $("calendarList").innerHTML = state.calendars
@@ -1591,7 +1642,7 @@ async function loadGoogleData() {
   );
   const calendars = rows.map((c, i) => ({
     ...c,
-    backgroundColor: c.backgroundColor || COLORS[i % COLORS.length],
+    backgroundColor: COLORS[i % COLORS.length],
   }));
   const { from, to } = requestRange();
   const batches = await Promise.all(
@@ -1654,6 +1705,8 @@ function movePeriod(n) {
   if (loading) return;
   if (state.view === "day")
     state.cursor.setUTCDate(state.cursor.getUTCDate() + n);
+  else if (state.view === "week")
+    state.cursor.setUTCDate(state.cursor.getUTCDate() + n * 7);
   else if (state.view === "year")
     state.cursor = new Date(Date.UTC(state.cursor.getUTCFullYear() + n, 0, 1));
   else
@@ -1734,8 +1787,20 @@ $("linksForm").onsubmit = async (e) => {
   if (complete) $("linksDialog").close();
 };
 
-
 function requestRange() {
+  const [start, end] = range();
+  // Fetch the complete boundary week without exceeding the API's 366-day limit.
+  if (
+    state.view === "week" &&
+    start.getUTCFullYear() !== end.getUTCFullYear()
+  ) {
+    const exclusiveEnd = startOfDay(end);
+    exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
+    return {
+      from: localKey(start) + "T00:00:00+08:00",
+      to: localKey(exclusiveEnd) + "T00:00:00+08:00",
+    };
+  }
   const year = state.cursor.getUTCFullYear();
   return {
     from: localKey(new Date(Date.UTC(year, 0, 1))) + "T00:00:00+08:00",
@@ -1743,7 +1808,8 @@ function requestRange() {
   };
 }
 function periodKey() {
-  return String(state.cursor.getUTCFullYear());
+  const { from, to } = requestRange();
+  return `${from}/${to}`;
 }
 function sourceName(link, index) {
   return DEFAULT_NAMES[DEFAULT_LINKS.indexOf(link)] || `Calendar ${index + 1}`;

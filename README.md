@@ -1,6 +1,6 @@
 ﻿# DILG Region 10 Calendar Activity Dashboard
 
-A runnable web app adapted from the supplied Calendar Activity Dashboard.html, using the exported navy-and-teal design with daily, monthly, and annual summaries, filters, agenda, conflict detection, and analytics.
+A runnable web app adapted from the supplied Calendar Activity Dashboard.html, using the exported navy-and-teal design with daily, weekly, monthly, and annual summaries, filters, agenda, concurrency detection, and analytics.
 
 ## Run locally
 
@@ -17,7 +17,7 @@ Open http://localhost:3000. Use `npm run dev` to restart the server automaticall
 
 The seven supplied links are preloaded in `public/app.js`: LGMED 10, RICTU CALENDAR (decoded from the subscription link), Planning, Quality Management, Region10 Personnel Calendar, PDMU (dilg10pdmu@gmail.com), and LGCDD (lgcdd10dilg@gmail.com). Display names come from the actual Google feeds. All five public feeds were successfully checked during implementation.
 
-- The full current year loads once when the page opens or refreshes. Today, Month, and Year reuse that data without importing again. Navigating to a different year automatically loads its full year. Requests use Asia/Manila boundaries and are limited to 366 days, including leap years.
+- The full current year loads once when the page opens or refreshes. Today, Week, Month, and Year reuse that data without importing again. Weeks run Monday through Sunday in Asia/Manila. A week crossing New Year loads its complete seven-day range; leaving that boundary week reloads the selected year's data. Navigating to a different year automatically loads its full year. Requests use Asia/Manila boundaries and are limited to 366 days, including leap years.
 - Recurring events, exceptions, moved instances, cancellations, and all-day dates are handled by node-ical.
 - Displayed dates and times use Asia/Manila, even on devices in other timezones.
 - Calendar links load automatically from the configured defaults or previously saved browser settings. The server does not persist links or event data.
@@ -28,6 +28,13 @@ The seven supplied links are preloaded in `public/app.js`: LGMED 10, RICTU CALEN
 ## Updated dashboard features
 
 Integrated from `calendar-activity-digest-source.zip`, retaining this project's Express/Vercel backend, recurrence expansion, default calendars, and Asia/Manila date handling.
+
+Updated again from `calendar-activity-digest(1).zip`:
+
+- Weekly navigation and summaries, including weeks spanning two years.
+- Distinct office colors shared by filter tiles, calendar markers, and activity rows. Consolidated activities display bands for each originating office.
+- The **Possible duplicate activities** metric counts consolidated activities with matching reports, rather than the number of extra reports.
+- Revised summaries describe unique activities and concurrent pairs. Existing suggested actions, keyboard controls, and filter behavior are retained.
 
 - Office tiles filter the agenda and analytics, alongside existing organization, delivery-format, and event-level filters.
 - Expanded activity details include focal persons, host agencies, staff, participant counts, description resource links, Meeting IDs, and passcodes.

@@ -23,7 +23,7 @@ test("annual view loads the whole Manila year and navigates between years", asyn
   await expect(page.locator("#pageTitle")).toHaveText("Annual activity summary");
   await expect(page.locator("#metricEvents")).toHaveText("3");
   await expect(page.locator("#periodTitle")).toHaveText("2026");
-  await expect(page.locator("#summaryMode")).toHaveText("Annual digest");
+  await expect(page.locator("#summaryMode")).toHaveText("Annual summary");
   expect(requests.slice(-7).map(r => r.url)).toEqual(initialLinks);
   expect(requests.at(-1)).toMatchObject({ from: "2026-01-01T00:00:00+08:00", to: "2027-01-01T00:00:00+08:00" });
   await expect(page.locator("#agenda")).toContainText("LGU meeting 12-15");
@@ -36,7 +36,7 @@ test("annual view loads the whole Manila year and navigates between years", asyn
   await page.locator("#nextBtn").click();
   await expect(page.locator("#periodTitle")).toHaveText("2027");
   await expect(page.locator("#metricEvents")).toHaveText("0");
-  await expect(page.locator("#summaryMode")).toHaveText("Annual digest");
+  await expect(page.locator("#summaryMode")).toHaveText("Annual summary");
   await page.locator("#prevBtn").click();
   await expect(page.locator("#metricEvents")).toHaveText("3");
   await page.locator("#todayBtn").click();

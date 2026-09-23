@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="A professional dashboard for daily and monthly activities across added Google Calendars."
+      content="A professional dashboard for daily, weekly, monthly, and annual activities across added Google Calendars."
     />
     <title>DILG Region 10 | Calendar Activity Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com/" />
@@ -61,6 +61,18 @@
               <path d="M16 3v4M8 3v4M3 10h18"></path></svg
             ><span>Today</span>
           </button>
+          <button data-view="week" aria-label="Week">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <rect x="3" y="5" width="18" height="16" rx="3" />
+              <path d="M16 3v4M8 3v4M3 10h18M7 14h10M7 17h6" /></svg
+            ><span>Week</span>
+          </button>
           <button data-view="month" aria-label="Month">
             <svg
               viewBox="0 0 24 24"
@@ -72,10 +84,18 @@
             ><span>Month</span>
           </button>
           <button data-view="year" aria-label="Year">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
               <rect x="3" y="4" width="18" height="17" rx="3"></rect>
-              <path d="M3 9h18M8 2v4M16 2v4M8 13h2M14 13h2M8 17h2M14 17h2"></path>
-            </svg><span>Year</span>
+              <path
+                d="M3 9h18M8 2v4M16 2v4M8 13h2M14 13h2M8 17h2M14 17h2"
+              ></path></svg
+            ><span>Year</span>
           </button>
         </nav>
         <div class="side-bottom">
@@ -96,7 +116,7 @@
           </div>
         </header>
 
-<div class="toolbar">
+        <div class="toolbar">
           <div class="period">
             <button class="icon-btn" id="prevBtn" aria-label="Previous period">
               <svg
@@ -143,24 +163,116 @@
               <option value="Unspecified">Unspecified</option>
             </select>
             <div class="relative">
-              <button class="select-like" id="calFilter" aria-expanded="false" aria-controls="calendarMenu">
+              <button
+                class="select-like"
+                id="calFilter"
+                aria-expanded="false"
+                aria-controls="calendarMenu"
+              >
                 All calendars ▾
               </button>
               <div class="calendar-menu" id="calendarMenu" hidden="">
                 <h3 id="calendarFilterHeading">Calendars included</h3>
-                <div id="calendarList" role="group" aria-labelledby="calendarFilterHeading"></div>
+                <div
+                  id="calendarList"
+                  role="group"
+                  aria-labelledby="calendarFilterHeading"
+                ></div>
               </div>
             </div>
           </div>
         </div>
 
         <section class="metrics">
-        <article class="metric"><div class="metric-head"><span>Unique activities</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span></div><div class="metric-value" id="metricEvents">0</div><div class="metric-note" id="metricEventsNote">after merging duplicate reports</div></article>
-        <article class="metric"><div class="metric-head"><span>Merged reports</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="11" height="11" rx="2"/><path d="M9 9h11v11H9"/></svg></span></div><div class="metric-value" id="metricMerged">0</div><div class="metric-note">duplicate office entries consolidated</div></article>
-        <article class="metric"><div class="metric-head"><span>Offices</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V7l8-4 8 4v14M8 10h2m4 0h2M8 14h2m4 0h2M10 21v-3h4v3"/></svg></span></div><div class="metric-value" id="metricOffices">0</div><div class="metric-note">reporting activity in this period</div></article>
-        <article class="metric"><div class="metric-head"><span id="metricFourthLabel">Categories</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg></span></div><div class="metric-value" id="metricFourth">0</div><div class="metric-note" id="metricFourthNote">activity categories represented</div></article>
-        <article class="metric alert"><div class="metric-head"><span>Concurrent activities</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="12" r="5"/><circle cx="16" cy="12" r="5"/></svg></span></div><div class="metric-value" id="metricConcurrent">0</div><div class="metric-note">different activities running together</div></article>
-      </section>
+          <article class="metric">
+            <div class="metric-head">
+              <span>Unique activities</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M4 6h16M4 12h16M4 18h10" /></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricEvents">0</div>
+            <div class="metric-note" id="metricEventsNote">
+              after consolidating possible duplicates
+            </div>
+          </article>
+          <article class="metric">
+            <div class="metric-head">
+              <span>Possible duplicate activities</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="4" y="4" width="11" height="11" rx="2" />
+                  <path d="M9 9h11v11H9" /></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricMerged">0</div>
+            <div class="metric-note">matched across office calendars</div>
+          </article>
+          <article class="metric">
+            <div class="metric-head">
+              <span>Offices</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M4 21V7l8-4 8 4v14M8 10h2m4 0h2M8 14h2m4 0h2M10 21v-3h4v3"
+                  /></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricOffices">0</div>
+            <div class="metric-note">reporting activity in this period</div>
+          </article>
+          <article class="metric">
+            <div class="metric-head">
+              <span id="metricFourthLabel">Categories</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m5 12 4 4L19 6" /></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricFourth">0</div>
+            <div class="metric-note" id="metricFourthNote">
+              activity categories represented
+            </div>
+          </article>
+          <article class="metric alert">
+            <div class="metric-head">
+              <span>Concurrent activities</span
+              ><span class="metric-icon"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="8" cy="12" r="5" />
+                  <circle cx="16" cy="12" r="5" /></svg
+              ></span>
+            </div>
+            <div class="metric-value" id="metricConcurrent">0</div>
+            <div class="metric-note">different activities running together</div>
+          </article>
+        </section>
 
         <section class="grid">
           <article class="card">
@@ -188,31 +300,50 @@
             <div class="analytics" id="analytics"></div>
           </article>
           <article class="card wide-card">
-            <div class="card-head"><h2>Originating divisions and offices</h2><span>Select an office to filter activities; select it again to clear.</span></div>
-            <div class="office-tiles" id="officeTiles" role="group" aria-label="Filter by office"></div>
+            <div class="card-head">
+              <h2>Divisions and offices with activities</h2>
+              <span
+                >Select an office to filter activities; select it again to
+                clear.</span
+              >
+            </div>
+            <div
+              class="office-tiles"
+              id="officeTiles"
+              role="group"
+              aria-label="Filter by office"
+            ></div>
           </article>
           <article class="card wide-card">
             <div class="card-head">
               <h2>Organizations and groups involved</h2>
-              <span id="groupFilterStatus" role="status">Select a group to filter activities. Activities may belong to several groups.</span>
+              <span id="groupFilterStatus" role="status"
+                >Select a group to filter activities. Activities may belong to
+                several groups.</span
+              >
             </div>
-            <div class="stakeholders" id="stakeholders" role="group" aria-label="Filter by organization or group"></div>
+            <div
+              class="stakeholders"
+              id="stakeholders"
+              role="group"
+              aria-label="Filter by organization or group"
+            ></div>
           </article>
           <div class="activity-panels">
-          <article class="card">
-            <div class="card-head">
-              <h2>Concurrent activities</h2>
-              <span id="conflictCount">—</span>
-            </div>
-            <div class="conflicts" id="conflicts"></div>
-          </article>
-          <article class="card agenda-card">
-            <div class="card-head">
-              <h2 id="agendaTitle">Today’s activities</h2>
-              <span id="agendaCount">—</span>
-            </div>
-            <div class="agenda" id="agenda"></div>
-          </article>
+            <article class="card">
+              <div class="card-head">
+                <h2>Concurrent activities</h2>
+                <span id="conflictCount">—</span>
+              </div>
+              <div class="conflicts" id="conflicts"></div>
+            </article>
+            <article class="card agenda-card">
+              <div class="card-head">
+                <h2 id="agendaTitle">Today’s activities</h2>
+                <span id="agendaCount">—</span>
+              </div>
+              <div class="agenda" id="agenda"></div>
+            </article>
           </div>
           <article class="card wide-card">
             <div class="card-head">
@@ -221,7 +352,6 @@
             </div>
             <div class="suggestions" id="suggestions"></div>
           </article>
-
         </section>
       </main>
     </div>
