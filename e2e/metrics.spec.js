@@ -18,7 +18,7 @@ test("summary cards consolidate office reports before counting concurrency", asy
     return route.fulfill({ json: { calendar: { id: url, summary: office }, events } });
   });
   await page.goto("/");
-  await expect(page.locator("#sideStatus")).toHaveText("9 of 9 calendars loaded");
+  await expect(page.locator("#sideStatus")).toHaveText("10 of 10 calendars loaded");
   await expect(page.locator(".metric-head > span:first-child")).toHaveText([
     "Unique activities", "Possible duplicate activities", "Offices", "Categories", "Concurrent activities",
   ]);
@@ -36,6 +36,6 @@ test("summary cards consolidate office reports before counting concurrency", asy
   await expect(shared.locator("summary")).toHaveCSS("background-image", "none");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Year", exact: true }).click();
-  await expect(page.locator("#sideStatus")).toHaveText("9 of 9 calendars loaded");
+  await expect(page.locator("#sideStatus")).toHaveText("10 of 10 calendars loaded");
   await expect(page.locator(".metric-value")).toHaveText(["2", "0", "1", "2", "1"]);
 });

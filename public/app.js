@@ -13,6 +13,7 @@ const DEFAULT_LINKS = [
   "https://calendar.google.com/calendar/embed?src=lgcdd10dilg%40gmail.com&ctz=Asia%2FManila",
   "https://calendar.google.com/calendar/u/0/embed?src=legaldilg10@gmail.com&ctz=Asia/Manila",
   "https://calendar.google.com/calendar/u/0/r/month/2026/11/1?cid=bacdilgr10%40gmail.com",
+  "https://calendar.google.com/calendar/embed?src=orddilg10%40gmail.com&ctz=Asia%2FManila",
 ];
 const DEFAULT_NAMES = [
   "LGMED",
@@ -24,6 +25,7 @@ const DEFAULT_NAMES = [
   "LGCDD",
   "Legal",
   "BAC -DILG",
+  "ORD",
 ];
 function safeRead(key) {
   try {
@@ -62,6 +64,7 @@ try {
       ],
       ["calendar_digest_legal_added", "legaldilg10@gmail.com", DEFAULT_LINKS[7]],
       ["calendar_digest_bac_added", "bacdilgr10@gmail.com", DEFAULT_LINKS[8]],
+      ["calendar_digest_ord_added", "orddilg10@gmail.com", DEFAULT_LINKS[9]],
     ]) {
       if (safeRead(key)) continue;
       const included = activeLinks.some((link) => {
@@ -92,6 +95,7 @@ try {
     localStorage.setItem("calendar_digest_lgcdd_added", "1");
     localStorage.setItem("calendar_digest_legal_added", "1");
     localStorage.setItem("calendar_digest_bac_added", "1");
+    localStorage.setItem("calendar_digest_ord_added", "1");
   }
 } catch {}
 let sourceResults = [],
@@ -1913,6 +1917,10 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
       if (data.calendar.id === "bacdilgr10@gmail.com") {
         data.calendar.summary = "BAC -DILG";
         data.events.forEach((e) => (e.calendarName = "BAC -DILG"));
+      }
+      if (data.calendar.id === "orddilg10@gmail.com") {
+        data.calendar.summary = "ORD";
+        data.events.forEach((e) => (e.calendarName = "ORD"));
       }
       data.events.forEach((e) => (e.color = color));
       return data;
