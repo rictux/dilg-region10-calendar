@@ -7,7 +7,7 @@ test("live calendars, navigation and responsive layout", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await expect(page.locator("#sideStatus")).toHaveText(
-    /^[1-8] of 8 calendars loaded$/,
+    /^[1-9] of 9 calendars loaded$/,
     { timeout: 45000 },
   );
   const loadedCount = Number(
@@ -53,7 +53,7 @@ test("failed feeds show unavailable data rather than an empty schedule", async (
   );
   await page.goto("/");
   await expect(page.locator("#sideStatus")).toHaveText(
-    "0 of 8 calendars loaded",
+    "0 of 9 calendars loaded",
   );
   await expect(page.locator("#metricEvents")).toHaveText("—");
   await expect(page.locator("#agenda")).toContainText(

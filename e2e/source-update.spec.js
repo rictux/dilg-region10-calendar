@@ -54,7 +54,7 @@ test("updated details, strict formats and office filters", async ({
   });
   await page.goto("/");
   await expect(page.locator("#sideStatus")).toHaveText(
-    "8 of 8 calendars loaded",
+    "9 of 9 calendars loaded",
   );
   await expect(page.locator("#metricEvents")).toHaveText("3");
   await expect(page.locator("#conflicts")).toContainText("Shared facilitator");

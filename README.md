@@ -15,7 +15,7 @@ Open http://localhost:3000. Use `npm run dev` to restart the server automaticall
 
 ## Included calendars
 
-The eight supplied links are preloaded in `public/app.js`: LGMED 10, RICTU CALENDAR (decoded from the subscription link), Planning, Quality Management, Region10 Personnel Calendar, PDMU (dilg10pdmu@gmail.com), LGCDD (lgcdd10dilg@gmail.com), and Legal (legaldilg10@gmail.com). Display names come from the actual Google feeds, with Legal explicitly labeled as configured. All five public feeds were successfully checked during implementation.
+The nine supplied links are preloaded in `public/app.js`: LGMED 10, RICTU CALENDAR (decoded from the subscription link), Planning, Quality Management, Region10 Personnel Calendar, PDMU (dilg10pdmu@gmail.com), LGCDD (lgcdd10dilg@gmail.com), Legal (legaldilg10@gmail.com), and BAC -DILG (bacdilgr10@gmail.com). Display names come from the actual Google feeds, with Legal and BAC -DILG explicitly labeled as configured. All five original public feeds were successfully checked during implementation.
 
 - The full current year loads once when the page opens or refreshes. Today, Week, Month, and Year reuse that data without importing again. Weeks run Monday through Sunday in Asia/Manila. A week crossing New Year loads its complete seven-day range; leaving that boundary week reloads the selected year's data. Navigating to a different year automatically loads its full year. Requests use Asia/Manila boundaries and are limited to 366 days, including leap years.
 - Recurring events, exceptions, moved instances, cancellations, and all-day dates are handled by node-ical.

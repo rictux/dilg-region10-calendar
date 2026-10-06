@@ -13,7 +13,7 @@ test("organization cards filter activities and preserve selection across views",
     return route.fulfill({ json: { calendar: { id: url, summary: "Test calendar" }, events } });
   });
   await page.goto("/");
-  await expect(page.locator("#sideStatus")).toHaveText("8 of 8 calendars loaded");
+  await expect(page.locator("#sideStatus")).toHaveText("9 of 9 calendars loaded");
   const cards = page.getByRole("group", { name: "Filter by organization or group" });
   const lgu = cards.locator('[data-group="LGU"]');
   const nga = cards.locator('[data-group="NGA"]');

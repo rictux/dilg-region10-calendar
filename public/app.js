@@ -12,6 +12,7 @@ const DEFAULT_LINKS = [
   "https://calendar.google.com/calendar/u/0?cid=ZGlsZzEwcGRtdUBnbWFpbC5jb20",
   "https://calendar.google.com/calendar/embed?src=lgcdd10dilg%40gmail.com&ctz=Asia%2FManila",
   "https://calendar.google.com/calendar/u/0/embed?src=legaldilg10@gmail.com&ctz=Asia/Manila",
+  "https://calendar.google.com/calendar/u/0/r/month/2026/11/1?cid=bacdilgr10%40gmail.com",
 ];
 const DEFAULT_NAMES = [
   "LGMED",
@@ -22,6 +23,7 @@ const DEFAULT_NAMES = [
   "PDMU",
   "LGCDD",
   "Legal",
+  "BAC -DILG",
 ];
 function safeRead(key) {
   try {
@@ -59,6 +61,7 @@ try {
         DEFAULT_LINKS[6],
       ],
       ["calendar_digest_legal_added", "legaldilg10@gmail.com", DEFAULT_LINKS[7]],
+      ["calendar_digest_bac_added", "bacdilgr10@gmail.com", DEFAULT_LINKS[8]],
     ]) {
       if (safeRead(key)) continue;
       const included = activeLinks.some((link) => {
@@ -88,6 +91,7 @@ try {
     localStorage.setItem("calendar_digest_pdmu_added", "1");
     localStorage.setItem("calendar_digest_lgcdd_added", "1");
     localStorage.setItem("calendar_digest_legal_added", "1");
+    localStorage.setItem("calendar_digest_bac_added", "1");
   }
 } catch {}
 let sourceResults = [],
@@ -1905,6 +1909,10 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
       if (data.calendar.id === "legaldilg10@gmail.com") {
         data.calendar.summary = "Legal";
         data.events.forEach((e) => (e.calendarName = "Legal"));
+      }
+      if (data.calendar.id === "bacdilgr10@gmail.com") {
+        data.calendar.summary = "BAC -DILG";
+        data.events.forEach((e) => (e.calendarName = "BAC -DILG"));
       }
       data.events.forEach((e) => (e.color = color));
       return data;
