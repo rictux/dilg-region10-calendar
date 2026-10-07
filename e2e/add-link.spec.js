@@ -16,11 +16,11 @@ test("Add Link asks for its own code at save and refreshes the calendars", async
   await page.goto("/");
   await expect(page.locator("#sideStatus")).toHaveText("1 of 1 calendars loaded");
   await page.getByRole("button", { name: "Add Link", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Add Link" });
-  await dialog.getByLabel("Name", { exact: true }).fill("New Office");
-  await dialog.getByLabel("Link", { exact: true }).fill("https://calendar.google.com/calendar/embed?src=new%40example.com");
+  const dialog = page.getByRole("dialog", { name: "Add shared calendars" });
+  await dialog.getByLabel("Name/Office", { exact: true }).fill("New Office");
+  await dialog.getByLabel("Calendar link", { exact: true }).fill("https://calendar.google.com/calendar/embed?src=new%40example.com");
   await expect(dialog.getByLabel("Input Add Link Auth Code:")).toBeHidden();
-  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await dialog.getByRole("button", { name: "Import calendars", exact: true }).click();
   expect(saves).toBe(0);
   await dialog.getByLabel("Input Add Link Auth Code:").fill("test-access-code");
   await dialog.getByRole("button", { name: "Confirm & save" }).click();
@@ -34,4 +34,55 @@ test("Add Link asks for its own code at save and refreshes the calendars", async
   expect(saves).toBe(1);
   await page.locator("#calFilter").click();
   await expect(page.locator("#calendarList")).toContainText("New Office");
+});
+
+test("multiple calendars retain only unsaved rows after a partial failure", async ({ page }) => {
+  const calendars = [];
+  const submitted = [];
+  let rejectSecond = true;
+  await page.route("**/api/calendar-links", route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { calendars } });
+    const body = route.request().postDataJSON();
+    submitted.push(body.name);
+    if (body.name === "Second Office" && rejectSecond) {
+      rejectSecond = false;
+      return route.fulfill({ status: 503, json: { error: "Please retry." } });
+    }
+    calendars.push({ id: body.name, name: body.name, link: body.link });
+    return route.fulfill({ status: 201, json: { saved: true } });
+  });
+  await page.route("**/api/calendar-feed", route => route.fulfill({ json: { calendar: { id: route.request().postDataJSON().url }, events: [] } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Add Link", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Add shared calendars" });
+  await expect(dialog.getByRole("button", { name: "Remove calendar 1" })).toBeDisabled();
+  await dialog.getByLabel("Name/Office", { exact: true }).fill("First Office");
+  await dialog.getByLabel("Calendar link", { exact: true }).fill("https://calendar.google.com/calendar/embed?src=first%40example.com");
+  await dialog.getByRole("button", { name: "Add another calendar" }).click();
+  await dialog.getByLabel("Name/Office", { exact: true }).nth(1).fill("Second Office");
+  await dialog.getByLabel("Calendar link", { exact: true }).nth(1).fill("https://calendar.google.com/calendar/embed?src=second%40example.com");
+  await dialog.getByRole("button", { name: "Add another calendar" }).click();
+  await dialog.getByRole("button", { name: "Remove calendar 3" }).click();
+  await expect(dialog.getByLabel("Name/Office", { exact: true })).toHaveCount(2);
+  await dialog.getByRole("button", { name: "Import calendars", exact: true }).click();
+  await dialog.getByLabel("Input Add Link Auth Code:").fill("test-code");
+  await dialog.getByRole("button", { name: "Confirm & save" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText("1 calendar imported. Please retry.");
+  await expect(dialog.getByLabel("Name/Office", { exact: true })).toHaveValue("Second Office");
+  await dialog.getByLabel("Input Add Link Auth Code:").fill("test-code");
+  await dialog.getByRole("button", { name: "Confirm & save" }).click();
+  await expect(dialog).toBeHidden();
+  expect(submitted).toEqual(["First Office", "Second Office", "Second Office"]);
+});
+
+test("calendar modal fits desktop and mobile screens", async ({ page }, testInfo) => {
+  await page.route("**/api/calendar-feed", route => route.fulfill({ json: { calendar: { id: route.request().postDataJSON().url }, events: [] } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Add Link", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Add shared calendars" });
+  await dialog.screenshot({ path: testInfo.outputPath("calendar-modal-desktop.png") });
+  await page.setViewportSize({ width: 375, height: 667 });
+  await expect(dialog.getByRole("button", { name: "Import calendars", exact: true })).toBeInViewport();
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await dialog.screenshot({ path: testInfo.outputPath("calendar-modal-mobile.png") });
 });
