@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 test("organization cards filter activities and preserve selection across views", async ({ page }) => {
   const errors = [];

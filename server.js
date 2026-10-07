@@ -1,6 +1,17 @@
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { fetchCalendar } from "./calendar.js";
+import { fetchCalendarLinks } from "./calendar-links.js";
+import { loadEnvFile } from "node:process";
+import { createAccessControl } from "./access.js";
+import { createAddCalendarHandler } from "./add-calendar.js";
+import { createCalendarPreloader } from "./calendar-preload.js";
+
+try {
+  loadEnvFile(fileURLToPath(new URL("./.env", import.meta.url)));
+} catch (error) {
+  if (error.code !== "ENOENT") throw error;
+}
 
 export const app = express();
 // Vercel imports this module rather than starting it with `node server.js`.
@@ -14,7 +25,34 @@ app.use((req, res, next) => {
   });
   next();
 });
+export const accessControl = createAccessControl();
+const preloader = createCalendarPreloader();
+app.post("/api/calendar-preload/open", (req, res, next) => accessControl.require(req, res, next), express.json({ limit: "4mb" }), (req, res) => {
+  try { res.json(preloader.open(req.body?.sealed)); }
+  catch { res.status(400).json({ error: "Preload expired or unavailable." }); }
+});
 app.use(express.json({ limit: "8kb" }));
+app.post("/api/calendar-preload", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (req.get("sec-fetch-site") === "cross-site") return res.sendStatus(403);
+  try { res.json({ sealed: await preloader.prepare() }); }
+  catch { res.status(503).json({ error: "Preload unavailable." }); }
+});
+app.post("/api/access", (req, res) => accessControl.login(req, res));
+app.use(["/api/calendar-links", "/api/calendar-feed"], (req, res, next) => accessControl.require(req, res, next));
+app.post("/api/calendar-links", createAddCalendarHandler());
+app.get("/api/calendar-links", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    res.json({ calendars: await fetchCalendarLinks() });
+  } catch (error) {
+    // Log diagnostics server-side without sending upstream bodies or credentials.
+    console.error("Calendar configuration lookup failed:", error.name);
+    res.status(503).json({
+      error: "Calendar list is unavailable. Please retry later or contact the administrator.",
+    });
+  }
+});
 let activeRequests = 0;
 app.post("/api/calendar-feed", async (req, res) => {
   res.set("Cache-Control", "no-store");

@@ -3,30 +3,63 @@ function manilaNow() {
   return new Date(Date.now() + 8 * 3600000);
 }
 
-const DEFAULT_LINKS = [
-  "https://calendar.google.com/calendar/embed?src=dilg.lgmed10%40gmail.com&ctz=Asia%2FManila",
-  "https://calendar.google.com/calendar/embed?src=rictu.dilg10%40gmail.com&ctz=Asia%2FManila",
-  "https://calendar.google.com/calendar/embed?src=rtenplanning%40gmail.com&ctz=Asia%2FManila",
-  "https://calendar.google.com/calendar/embed?src=qmsec10dilg%40gmail.com&ctz=Asia%2FManila",
-  "https://calendar.google.com/calendar/embed?src=region10personnel%40gmail.com&ctz=Asia%2FManila",
-  "https://calendar.google.com/calendar/u/0?cid=ZGlsZzEwcGRtdUBnbWFpbC5jb20",
-  "https://calendar.google.com/calendar/embed?src=lgcdd10dilg%40gmail.com&ctz=Asia%2FManila",
-  "https://calendar.google.com/calendar/u/0/embed?src=legaldilg10@gmail.com&ctz=Asia/Manila",
-  "https://calendar.google.com/calendar/u/0/r/month/2026/11/1?cid=bacdilgr10%40gmail.com",
-  "https://calendar.google.com/calendar/embed?src=orddilg10%40gmail.com&ctz=Asia%2FManila",
-];
-const DEFAULT_NAMES = [
-  "LGMED",
-  "RICTU",
-  "Planning",
-  "Quality Management",
-  "Personnel",
-  "PDMU",
-  "LGCDD",
-  "Legal",
-  "BAC -DILG",
-  "ORD",
-];
+const calendarNames = new Map();
+let accessToken = "";
+let preparedCalendars = null;
+let preparedFeeds = new Map();
+// Only an encrypted snapshot is downloaded before the code is verified.
+const backgroundCalendars = fetch("/api/calendar-preload", {
+  method: "POST", signal: AbortSignal.timeout(35000),
+}).then(async response => response.ok ? (await response.json()).sealed : null).catch(() => null);
+
+async function usePreparedCalendars() {
+  const sealed = await backgroundCalendars;
+  if (!sealed) return;
+  try {
+    const response = await calendarRequest("/api/calendar-preload/open", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sealed }), signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    const range = requestRange();
+    if (data.from !== range.from || data.to !== range.to) return;
+    preparedCalendars = { calendars: data.calendars };
+    preparedFeeds = new Map(data.feeds.map(feed => [feed.link, feed]));
+  } catch { /* Normal authenticated loading remains available. */ }
+}
+
+function showAccessGate(message = "") {
+  if ($("addLinkDialog").open) $("addLinkDialog").close();
+  accessToken = "";
+  preparedCalendars = null;
+  preparedFeeds.clear();
+  requestVersion++;
+  loading = false;
+  calendarListLoaded = false;
+  state.connected = false;
+  state.events = [];
+  state.calendars = [];
+  state.selected.clear();
+  $("calendarApp").hidden = true;
+  $("calendarApp").inert = true;
+  $("accessGate").hidden = false;
+  $("accessError").textContent = message;
+  $("authCode").value = "";
+  $("authCode").focus();
+}
+
+async function calendarRequest(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${accessToken}` },
+  });
+  if (response.status === 401) {
+    showAccessGate("Please enter the current Auth Code to continue.");
+    throw new Error("Calendar access has expired.");
+  }
+  return response;
+}
 function safeRead(key) {
   try {
     return localStorage.getItem(key);
@@ -43,61 +76,8 @@ function safeWrite(key, value) {
     );
   }
 }
-let activeLinks = DEFAULT_LINKS;
-try {
-  const saved = JSON.parse(safeRead("calendar_digest_links"));
-  if (
-    Array.isArray(saved) &&
-    saved.length &&
-    saved.length <= 15 &&
-    saved.every((x) => typeof x === "string")
-  ) {
-    activeLinks = [...saved];
-    // Add the newly configured calendar once without replacing custom links.
-    // The marker lets users remove it later without it reappearing on reload.
-    for (const [key, calendarId, calendarLink] of [
-      ["calendar_digest_pdmu_added", "dilg10pdmu@gmail.com", DEFAULT_LINKS[5]],
-      [
-        "calendar_digest_lgcdd_added",
-        "lgcdd10dilg@gmail.com",
-        DEFAULT_LINKS[6],
-      ],
-      ["calendar_digest_legal_added", "legaldilg10@gmail.com", DEFAULT_LINKS[7]],
-      ["calendar_digest_bac_added", "bacdilgr10@gmail.com", DEFAULT_LINKS[8]],
-      ["calendar_digest_ord_added", "orddilg10@gmail.com", DEFAULT_LINKS[9]],
-    ]) {
-      if (safeRead(key)) continue;
-      const included = activeLinks.some((link) => {
-        try {
-          const params = new URL(link).searchParams;
-          const cid = params.get("cid") || "";
-          const id = params.get("src") || (cid.includes("@") ? cid : atob(cid));
-          return (
-            id.toLowerCase() === calendarId ||
-            decodeURIComponent(link).toLowerCase().includes(`/${calendarId}/`)
-          );
-        } catch {
-          return false;
-        }
-      });
-      const canAdd = !included && activeLinks.length < 15;
-      if (canAdd) activeLinks.push(calendarLink);
-      if (included || canAdd) {
-        localStorage.setItem(
-          "calendar_digest_links",
-          JSON.stringify(activeLinks),
-        );
-        localStorage.setItem(key, "1");
-      }
-    }
-  } else {
-    localStorage.setItem("calendar_digest_pdmu_added", "1");
-    localStorage.setItem("calendar_digest_lgcdd_added", "1");
-    localStorage.setItem("calendar_digest_legal_added", "1");
-    localStorage.setItem("calendar_digest_bac_added", "1");
-    localStorage.setItem("calendar_digest_ord_added", "1");
-  }
-} catch {}
+let activeLinks = [];
+let calendarListLoaded = false;
 let sourceResults = [],
   loading = false,
   requestVersion = 0,
@@ -1880,9 +1860,54 @@ function periodKey() {
   return `${from}/${to}`;
 }
 function sourceName(link, index) {
-  return DEFAULT_NAMES[DEFAULT_LINKS.indexOf(link)] || `Calendar ${index + 1}`;
+  return calendarNames.get(link) || `Calendar ${index + 1}`;
+}
+async function loadCalendarConfiguration() {
+  loading = true;
+  state.connected = false;
+  render();
+  $("sideStatus").textContent = "Loading calendar list...";
+  try {
+    let data = preparedCalendars;
+    preparedCalendars = null;
+    if (!data) {
+    const response = await calendarRequest("/api/calendar-links", {
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error("Calendar list could not be loaded. Reload to retry or contact the administrator.");
+    data = await response.json();
+    }
+    if (!Array.isArray(data.calendars) || data.calendars.length > 15 ||
+      data.calendars.some((row) => !row || typeof row.name !== "string" || !row.name.trim() || typeof row.link !== "string")) {
+      throw new Error("Calendar list is invalid. Contact the administrator.");
+    }
+    if (!data.calendars.length) throw new Error("No calendars have been configured yet.");
+    calendarNames.clear();
+    for (const row of data.calendars) calendarNames.set(row.link, row.name);
+    activeLinks = data.calendars.map((row) => row.link);
+    calendarListLoaded = true;
+    await loadLinkedCalendars(activeLinks, { save: false, quiet: true });
+  } catch (error) {
+    loading = false;
+    calendarListLoaded = false;
+    state.connected = false;
+    state.events = [];
+    state.calendars = [];
+    state.selected.clear();
+    activeLinks = [];
+    calendarNames.clear();
+    renderCalendarMenu();
+    render();
+    $("sideStatus").textContent = "Calendar list unavailable";
+    $("sideDot").classList.remove("live");
+    $("insights").textContent = error.name === "TimeoutError"
+      ? "Calendar list request timed out. Reload to retry."
+      : error.message;
+  }
 }
 function renderAvailability() {
+  $("addLinkBtn").disabled = loading || !accessToken;
   const unavailable = loading || !state.connected;
   $("prevBtn").disabled = loading;
   $("nextBtn").disabled = loading;
@@ -1955,28 +1980,29 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
   render();
   const results = await Promise.allSettled(
     links.map(async (link, i) => {
-      const response = await fetch("/api/calendar-feed", {
+      const prepared = preparedFeeds.get(link);
+      preparedFeeds.delete(link);
+      let data;
+      if (prepared) {
+        if (prepared.error) throw new Error(prepared.error);
+        data = prepared.data;
+      } else {
+      const response = await calendarRequest("/api/calendar-feed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: link, ...range }),
         signal: AbortSignal.timeout(30000),
       });
-      const data = await response.json();
+      data = await response.json();
       if (!response.ok)
         throw Error(data.error || "Calendar could not be loaded.");
+      }
       const color = COLORS[i % COLORS.length];
       data.calendar.backgroundColor = color;
-      if (data.calendar.id === "legaldilg10@gmail.com") {
-        data.calendar.summary = "Legal";
-        data.events.forEach((e) => (e.calendarName = "Legal"));
-      }
-      if (data.calendar.id === "bacdilgr10@gmail.com") {
-        data.calendar.summary = "BAC -DILG";
-        data.events.forEach((e) => (e.calendarName = "BAC -DILG"));
-      }
-      if (data.calendar.id === "orddilg10@gmail.com") {
-        data.calendar.summary = "ORD";
-        data.events.forEach((e) => (e.calendarName = "ORD"));
+      const name = calendarNames.get(link);
+      if (name) {
+        data.calendar.summary = name;
+        data.events.forEach((e) => (e.calendarName = name));
       }
       data.events.forEach((e) => (e.color = color));
       return data;
@@ -2040,6 +2066,10 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
 }
 async function refreshPeriod(force = false) {
   if (loading) return;
+  if (!calendarListLoaded && state.source !== "oauth") {
+    await loadCalendarConfiguration();
+    return;
+  }
   if (!force && loadedPeriod === periodKey()) {
     render();
     return;
@@ -2069,4 +2099,92 @@ document.addEventListener("keydown", (event) => {
 });
 renderCalendarMenu();
 render();
-loadLinkedCalendars(activeLinks, { save: false, quiet: true });
+$("addLinkBtn").addEventListener("click", () => {
+  $("addLinkForm").reset();
+  $("addCodeSection").hidden = true;
+  $("addCalendarCode").required = false;
+  $("addLinkError").textContent = "";
+  $("addLinkError").style.display = "none";
+  $("saveAddLink").textContent = "Save";
+  $("addLinkDialog").showModal();
+  $("addCalendarName").focus();
+});
+$("cancelAddLink").addEventListener("click", () => $("addLinkDialog").close());
+$("addLinkDialog").addEventListener("close", () => { $("addCalendarCode").value = ""; });
+$("addLinkForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if ($("addCodeSection").hidden) {
+    $("addCodeSection").hidden = false;
+    $("addCalendarCode").required = true;
+    $("saveAddLink").textContent = "Confirm & save";
+    $("addCalendarCode").focus();
+    return;
+  }
+  const button = $("saveAddLink");
+  button.disabled = true;
+  $("cancelAddLink").disabled = true;
+  button.textContent = "Saving...";
+  $("addLinkError").textContent = "";
+  $("addLinkError").style.display = "none";
+  try {
+    const response = await calendarRequest("/api/calendar-links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: $("addCalendarName").value.trim(), link: $("addCalendarLink").value.trim(), code: $("addCalendarCode").value }),
+      signal: AbortSignal.timeout(45000),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to save the calendar.");
+    $("addLinkDialog").close();
+    toast("Calendar link saved.");
+    await loadCalendarConfiguration();
+  } catch (error) {
+    $("addLinkError").textContent = error.name === "TimeoutError" ? "Save timed out. Reload to check whether the link was saved before retrying." : error.message;
+    $("addLinkError").style.display = "block";
+    $("addCalendarCode").value = "";
+    if ($("addLinkDialog").open) $("addCalendarCode").focus();
+  } finally {
+    button.disabled = false;
+    $("cancelAddLink").disabled = false;
+    button.textContent = "Confirm & save";
+  }
+});
+$("addLinkDialog").addEventListener("cancel", event => {
+  if ($("saveAddLink").disabled) event.preventDefault();
+});
+$("accessForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = $("accessSubmit");
+  button.disabled = true;
+  button.textContent = "Checking...";
+  $("accessError").textContent = "";
+  try {
+    const response = await fetch("/api/access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: $("authCode").value }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to verify the Auth Code.");
+    if (typeof data.token !== "string" || !data.token) throw new Error("Unable to verify the Auth Code.");
+    accessToken = data.token;
+    $("authCode").value = "";
+    button.textContent = "Preparing calendar...";
+    await usePreparedCalendars();
+    if (!accessToken) return;
+    await loadCalendarConfiguration();
+    if (!accessToken) return;
+    $("accessGate").hidden = true;
+    $("calendarApp").hidden = false;
+    $("calendarApp").inert = false;
+    $("pageTitle").setAttribute("tabindex", "-1");
+    $("pageTitle").focus();
+  } catch (error) {
+    $("accessError").textContent = error.name === "TimeoutError" ? "Verification timed out. Please try again." : error.message;
+    $("authCode").focus();
+  } finally {
+    button.disabled = false;
+    button.textContent = "Open calendar";
+  }
+});

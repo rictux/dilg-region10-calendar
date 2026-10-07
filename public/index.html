@@ -25,12 +25,28 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <main id="accessGate" class="access-gate">
+      <form id="accessForm" class="access-card">
+        <div class="access-art" aria-hidden="true">
+          <div class="access-art-lines"></div>
+          <svg viewBox="0 0 160 130" fill="none"><rect x="30" y="24" width="100" height="90" rx="14" fill="#214c5b" stroke="#64878c"/><rect x="20" y="14" width="100" height="90" rx="14" fill="#fbfcf8"/><path d="M20 42h100" stroke="#dbe5e2"/><path d="M45 7v17M95 7v17" stroke="#77d6b2" stroke-width="7" stroke-linecap="round"/><g fill="#b4c9c7"><circle cx="43" cy="58" r="4"/><circle cx="69" cy="58" r="4"/><circle cx="95" cy="58" r="4"/><circle cx="43" cy="82" r="4"/><circle cx="69" cy="82" r="4"/></g><circle cx="110" cy="94" r="22" fill="#80ddbb" stroke="#153c4a" stroke-width="5"/><path d="m100 94 7 7 12-14" stroke="#153c4a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="access-art-caption">A little clarity for the day ahead.</span>
+        </div>
+        <div class="access-content">
+        <label for="authCode">Input current Auth Code:</label>
+        <p class="access-intro" id="accessHint">Enter your shared code to view the schedule.</p>
+        <input id="authCode" name="code" type="password" required maxlength="1024" autocomplete="off" autofocus placeholder="Enter your code" aria-describedby="accessHint accessError" />
+        <p id="accessError" role="alert"></p>
+        <button class="btn primary" id="accessSubmit" type="submit">Open calendar</button>
+        </div>
+      </form>
+    </main>
     <a class="skip-link" href="#pageTitle">Skip to dashboard</a
     ><noscript
       >This dashboard requires JavaScript to load Google Calendar
       activities.</noscript
     >
-    <div class="app">
+    <div class="app" id="calendarApp" hidden inert>
       <aside class="sidebar">
         <div class="brand">
           <div class="brand-mark">
@@ -114,6 +130,7 @@
             <h1 id="pageTitle">Today’s activity</h1>
             <p id="subtitle">A clear view of where your day is going.</p>
           </div>
+          <button class="btn primary" id="addLinkBtn" type="button">Add Link</button>
         </header>
 
         <div class="toolbar">
@@ -356,6 +373,38 @@
       </main>
     </div>
 
+    <dialog id="addLinkDialog" aria-labelledby="addLinkTitle">
+      <form class="modal" id="addLinkForm">
+        <div class="add-link-heading">
+          <span class="add-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18m-9 3v4m-2-2h4"/></svg></span>
+          <div><h2 id="addLinkTitle">Add Link</h2><p>Bring another calendar into view.</p></div>
+        </div>
+        <div class="add-link-fields">
+        <div class="calendar-field">
+        <span class="field-number" aria-hidden="true">01</span><div>
+        <label for="addCalendarName">Name</label>
+        <input id="addCalendarName" name="name" required maxlength="200" autocomplete="off" placeholder="e.g. Planning Office" aria-describedby="calendarNameHint" />
+        <p class="field-note" id="calendarNameHint">The name shown on your dashboard.</p>
+        </div></div>
+        <div class="calendar-field">
+        <span class="field-number" aria-hidden="true">02</span><div>
+        <label for="addCalendarLink">Link</label>
+        <input id="addCalendarLink" name="link" type="url" required maxlength="2048" placeholder="https://calendar.google.com/…" aria-describedby="calendarLinkHint" />
+        <p class="field-note" id="calendarLinkHint">Paste a public Google Calendar share or iCal link.</p>
+        </div></div>
+        <div id="addCodeSection" hidden>
+          <span class="confirm-caption">One last step</span>
+          <label for="addCalendarCode">Input Add Link Auth Code:</label>
+          <input id="addCalendarCode" name="code" type="password" maxlength="1024" autocomplete="off" placeholder="Enter the code to confirm" aria-describedby="addLinkError" />
+        </div>
+        <p id="addLinkError" class="error" role="alert"></p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" id="cancelAddLink" type="button">Cancel</button>
+          <button class="btn primary" id="saveAddLink" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="linksDialog">
       <form class="modal" method="dialog" id="linksForm">
         <h2>Add shared calendars</h2>
