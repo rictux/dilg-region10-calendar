@@ -974,7 +974,7 @@ function range() {
     );
   return [a, b];
 }
-function currentEvents({ ignoreGroup = false, ignoreOffice = false } = {}) {
+function periodActivities() {
   const [a, b] = range();
   // Filter source calendars first so excluded offices cannot affect merged totals.
   const reports = state.events.filter(
@@ -984,7 +984,10 @@ function currentEvents({ ignoreGroup = false, ignoreOffice = false } = {}) {
       eventEnd(e) > a &&
       e.status !== "cancelled",
   );
-  return mergeDuplicateActivities(reports).filter(
+  return mergeDuplicateActivities(reports);
+}
+function currentEvents({ ignoreGroup = false, ignoreOffice = false } = {}, activities = periodActivities()) {
+  return activities.filter(
     (e) =>
       (state.modeFilter === "all" || deliveryMode(e) === state.modeFilter) &&
       (state.scopeFilter === "all" || eventLevel(e) === state.scopeFilter) &&
@@ -997,10 +1000,7 @@ function currentEvents({ ignoreGroup = false, ignoreOffice = false } = {}) {
   );
 }
 function render() {
-  const ev = currentEvents(),
-    [a, b] = range(),
-    unique = new Set(ev.flatMap((e) => e.offices)).size,
-    conflicts = findConflicts(ev);
+  const [a, b] = range();
   $("pageTitle").textContent =
     state.view === "day"
       ? "Today’s activity"
@@ -1033,6 +1033,19 @@ function render() {
               ? { year: "numeric" }
               : { month: "long", year: "numeric" },
           );
+  $("summaryMode").textContent =
+    { day: "Daily summary", week: "Weekly summary", month: "Monthly summary", year: "Annual summary" }[state.view];
+  $("agendaTitle").textContent =
+    { day: "Daily activities", week: "All weekly activities", month: "All monthly activities", year: "All annual activities" }[state.view];
+  // Loading must never run the expensive annual analysis before showing placeholders.
+  if (loading) {
+    renderAvailability();
+    return;
+  }
+  const activities = periodActivities(),
+    ev = currentEvents({}, activities),
+    unique = new Set(ev.flatMap((e) => e.offices)).size,
+    conflicts = findConflicts(ev);
   $("metricEvents").textContent = ev.length;
   $("metricMerged").textContent = ev.filter((e) => e.mergedCount > 0).length;
   $("metricOffices").textContent = unique;
@@ -1044,8 +1057,8 @@ function render() {
   renderSummary(ev, conflicts, ev.filter((e) => e.mergedCount > 0).length);
   renderBreakdown(ev);
   renderAnalytics(ev);
-  renderOfficeTiles(currentEvents({ ignoreOffice: true }));
-  renderStakeholders(currentEvents({ ignoreGroup: true }));
+  renderOfficeTiles(currentEvents({ ignoreOffice: true }, activities));
+  renderStakeholders(currentEvents({ ignoreGroup: true }, activities));
   renderConflicts(conflicts);
   renderSuggestions(ev, conflicts);
   renderAgenda(ev);
@@ -1075,14 +1088,6 @@ function localKey(d) {
   );
 }
 function renderSummary(ev, concurrent, duplicates) {
-  $("summaryMode").textContent =
-    state.view === "day"
-      ? "Daily summary"
-      : state.view === "week"
-        ? "Weekly summary"
-        : state.view === "month"
-          ? "Monthly summary"
-          : "Annual summary";
   const cats = ev.reduce(
       (o, e) => ((o[category(e)] = (o[category(e)] || 0) + 1), o),
       {},
@@ -1385,14 +1390,6 @@ function renderSuggestions(ev, conflicts) {
     .join("");
 }
 function renderAgenda(ev) {
-  $("agendaTitle").textContent =
-    state.view === "day"
-      ? "Daily activities"
-      : state.view === "week"
-        ? "All weekly activities"
-        : state.view === "year"
-          ? "All annual activities"
-          : "All monthly activities";
   $("agendaCount").textContent =
     ev.length + " " + (ev.length === 1 ? "activity" : "activities");
   if (!ev.length) {
@@ -2045,6 +2042,16 @@ async function refreshPeriod(force = false) {
     return;
   }
   if (!force && loadedPeriod === periodKey()) {
+    if (state.view === "year") {
+      loading = true;
+      try {
+        render();
+        // Two frames allow the active menu and skeletons to paint before analysis.
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      } finally {
+        loading = false;
+      }
+    }
     render();
     return;
   }

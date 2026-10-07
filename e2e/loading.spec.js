@@ -1,5 +1,47 @@
 import { test, expect } from "./fixtures.js";
 
+test("cached Year navigation paints the selection and skeletons before annual results", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-09-22T04:00:00Z") });
+  let requests = 0;
+  await page.route("**/api/calendar-feed", route => {
+    requests++;
+    const { url } = route.request().postDataJSON();
+    const events = url.includes("dilg.lgmed10") ? ["01-15", "09-22"].map(date => ({
+      id: date, summary: `Office meeting ${date}`, calendarId: url, calendarName: "LGMED",
+      start: { dateTime: `2026-${date}T09:00:00+08:00` },
+      end: { dateTime: `2026-${date}T10:00:00+08:00` },
+    })) : [];
+    return route.fulfill({ json: { calendar: { id: url, summary: "Office" }, events } });
+  });
+  await page.goto("/");
+  await expect(page.locator("#metricEvents")).toHaveText("1");
+  const initialRequests = requests;
+  for (const from of ["Today", "Week", "Month"]) {
+    await page.getByRole("button", { name: from, exact: true }).first().click();
+    await expect(page.locator("#nextBtn")).toBeEnabled();
+    // Observe the next browser frame, not just the final DOM after click completes.
+    await page.evaluate(() => {
+      const year = document.querySelector('[data-view="year"]');
+      window.yearLoadingFrame = new Promise(resolve => {
+        year.addEventListener("click", () => requestAnimationFrame(() => resolve({
+          selected: year.classList.contains("active"),
+          busy: document.querySelector("#dashboard").getAttribute("aria-busy"),
+          skeleton: !!document.querySelector("#agenda .skeleton"),
+          title: document.querySelector("#pageTitle").textContent,
+        })), { once: true });
+      });
+    });
+    await page.getByRole("button", { name: "Year", exact: true }).click();
+    expect(await page.evaluate(() => window.yearLoadingFrame)).toEqual({
+      selected: true, busy: "true", skeleton: true, title: "Annual activity summary",
+    });
+    await expect(page.locator("#metricEvents")).toHaveText("2");
+    await expect(page.locator("#dashboard")).toHaveAttribute("aria-busy", "false");
+    await expect(page.locator(".skeleton")).toHaveCount(0);
+    expect(requests).toBe(initialRequests);
+  }
+});
+
 for (const view of ["Today", "Week", "Month", "Year"]) {
   test(`${view} shows skeletons until the requested period settles`, async ({ page }) => {
     await page.clock.install({ time: new Date("2026-12-31T04:00:00Z") });
