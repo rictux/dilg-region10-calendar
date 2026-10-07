@@ -710,6 +710,27 @@ main {
   display: block;
   color: var(--ink);
 }
+.conflict-activities {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 9px;
+  padding: 0;
+  list-style: none;
+}
+.conflict-activities li {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.conflict-offices,
+.conflict-shared {
+  color: var(--muted);
+  font-size: 12px;
+}
+.conflict-shared { margin-top: 4px; }
+.conflict-offices { margin-top: 4px; }
 .conflict-badge {
   background: #edf8f7;
   color: #087a69;

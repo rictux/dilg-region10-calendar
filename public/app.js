@@ -1298,7 +1298,11 @@ function renderConflicts(pairs) {
           const shared = [...x.sharedFac, ...x.sharedPart]
             .slice(0, 3)
             .join(", ");
-          return `<div class="conflict-item"><span class="conflict-time">${fmtDate(x.start, { month: "short", day: "numeric" })}<br>${fmtDate(x.start, { hour: "numeric", minute: "2-digit" })}–${fmtDate(x.end, { hour: "numeric", minute: "2-digit" })}</span><div class="conflict-pair"><strong>${esc(x.a.summary)} ↔ ${esc(x.b.summary)}</strong>${esc(x.a.offices.join(", "))} and ${esc(x.b.offices.join(", "))}${shared ? ` · Shared: ${esc(shared)}` : ""}</div><span class="conflict-badge">${esc(x.basis)}</span></div>`;
+          const officeList = new Intl.ListFormat("en", { style: "long", type: "conjunction" });
+          const activities = [x.a, x.b].map((activity) =>
+            `<li><strong>${esc(activity.summary)}</strong><div class="conflict-offices">${esc(officeList.format([...new Set(activity.offices)]))}</div></li>`,
+          ).join("");
+          return `<div class="conflict-item"><span class="conflict-time">${fmtDate(x.start, { month: "short", day: "numeric" })}<br>${fmtDate(x.start, { hour: "numeric", minute: "2-digit" })}–${fmtDate(x.end, { hour: "numeric", minute: "2-digit" })}</span><div class="conflict-pair"><ul class="conflict-activities" aria-label="Overlapping activities">${activities}</ul>${shared ? `<div class="conflict-shared">Shared: ${esc(shared)}</div>` : ""}</div><span class="conflict-badge">${esc(x.basis)}</span></div>`;
         })
         .join("")
     : '<div class="empty"><strong>No concurrent activities</strong>No different activities run at overlapping times in this period.</div>';
