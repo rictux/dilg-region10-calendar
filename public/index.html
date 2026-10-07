@@ -357,35 +357,37 @@
       </main>
     </div>
 
-    <dialog id="addLinkDialog" aria-labelledby="addLinkTitle">
+    <dialog id="addLinkDialog" aria-labelledby="addLinkTitle" aria-describedby="addLinkDescription">
       <form class="modal" id="addLinkForm">
-        <div class="add-link-heading">
-          <span class="add-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18m-9 3v4m-2-2h4"/></svg></span>
-          <div><h2 id="addLinkTitle">Add Link</h2><p>Bring another calendar into view.</p></div>
+        <h2 id="addLinkTitle">Add shared calendars</h2>
+        <p id="addLinkDescription">Add the calendar link and the division or office it belongs to. The Name/Office entered here will be used throughout the dashboard and summaries.</p>
+        <div id="addCalendarRows">
+          <div class="shared-calendar-row">
+            <div>
+              <label for="addCalendarName">Name/Office</label>
+              <input id="addCalendarName" name="name" required maxlength="200" autocomplete="off" placeholder="e.g., LGCDD or Bukidnon" />
+            </div>
+            <div>
+              <label for="addCalendarLink">Calendar link</label>
+              <input id="addCalendarLink" name="link" type="url" required maxlength="2048" autocomplete="off" spellcheck="false" placeholder="https://calendar.google.com/calendar/..." />
+            </div>
+            <button class="btn remove-calendar" type="button" aria-label="Remove calendar 1" disabled>&times;</button>
+          </div>
         </div>
-        <div class="add-link-fields">
-        <div class="calendar-field">
-        <span class="field-number" aria-hidden="true">01</span><div>
-        <label for="addCalendarName">Name</label>
-        <input id="addCalendarName" name="name" required maxlength="200" autocomplete="off" placeholder="e.g. Planning Office" aria-describedby="calendarNameHint" />
-        <p class="field-note" id="calendarNameHint">The name shown on your dashboard.</p>
-        </div></div>
-        <div class="calendar-field">
-        <span class="field-number" aria-hidden="true">02</span><div>
-        <label for="addCalendarLink">Link</label>
-        <input id="addCalendarLink" name="link" type="url" required maxlength="2048" placeholder="https://calendar.google.com/…" aria-describedby="calendarLinkHint" />
-        <p class="field-note" id="calendarLinkHint">Paste a public Google Calendar share or iCal link.</p>
-        </div></div>
+        <button class="btn" id="addAnotherCalendar" type="button"><span aria-hidden="true">+</span> Add another calendar</button>
+        <div class="link-help">
+          <span><b>Public calendar:</b> Its normal share or embed link will work.</span>
+          <span><b>Private calendar:</b> Only public calendars can be saved to this shared dashboard. Secret iCal links are not supported.</span>
+        </div>
         <div id="addCodeSection" hidden>
           <span class="confirm-caption">One last step</span>
           <label for="addCalendarCode">Input Add Link Auth Code:</label>
           <input id="addCalendarCode" name="code" type="password" maxlength="1024" autocomplete="off" placeholder="Enter the code to confirm" aria-describedby="addLinkError" />
         </div>
         <p id="addLinkError" class="error" role="alert"></p>
-        </div>
         <div class="modal-actions">
           <button class="btn" id="cancelAddLink" type="button">Cancel</button>
-          <button class="btn primary" id="saveAddLink" type="submit">Save</button>
+          <button class="btn primary" id="saveAddLink" type="submit">Import calendars</button>
         </div>
       </form>
     </dialog>

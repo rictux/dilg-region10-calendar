@@ -2031,20 +2031,63 @@ document.addEventListener("keydown", (event) => {
 });
 renderCalendarMenu();
 render();
+const calendarRowTemplate = $("addCalendarRows").firstElementChild.cloneNode(true);
+let calendarRowSequence = 0;
+function updateCalendarRowControls() {
+  const rows = [...$("addCalendarRows").children];
+  rows.forEach((row, index) => {
+    const remove = row.querySelector("button");
+    remove.disabled = rows.length === 1;
+    remove.setAttribute("aria-label", `Remove calendar ${index + 1}`);
+  });
+  $("addAnotherCalendar").disabled = rows.length >= 15;
+}
+function appendCalendarRow() {
+  const row = calendarRowTemplate.cloneNode(true);
+  const suffix = ++calendarRowSequence;
+  row.querySelectorAll("input").forEach(input => {
+    const label = row.querySelector(`label[for="${input.id}"]`);
+    input.id += `-${suffix}`;
+    label.htmlFor = input.id;
+    input.value = "";
+  });
+  $("addCalendarRows").append(row);
+  updateCalendarRowControls();
+  return row;
+}
+$("addAnotherCalendar").addEventListener("click", () => {
+  if ($("addCalendarRows").children.length < 15) appendCalendarRow().querySelector("input").focus();
+});
+$("addCalendarRows").addEventListener("click", event => {
+  const remove = event.target.closest(".remove-calendar");
+  if (!remove || remove.disabled) return;
+  const row = remove.closest(".shared-calendar-row");
+  const next = row.nextElementSibling || row.previousElementSibling;
+  row.remove();
+  updateCalendarRowControls();
+  next.querySelector("input").focus();
+});
 $("addLinkBtn").addEventListener("click", () => {
   $("addLinkForm").reset();
+  $("addCalendarRows").replaceChildren(calendarRowTemplate.cloneNode(true));
+  updateCalendarRowControls();
   $("addCodeSection").hidden = true;
   $("addCalendarCode").required = false;
   $("addLinkError").textContent = "";
   $("addLinkError").style.display = "none";
-  $("saveAddLink").textContent = "Save";
+  $("saveAddLink").textContent = "Import calendars";
   $("addLinkDialog").showModal();
-  $("addCalendarName").focus();
+  $("addCalendarRows").querySelector("input").focus();
 });
 $("cancelAddLink").addEventListener("click", () => $("addLinkDialog").close());
 $("addLinkDialog").addEventListener("close", () => { $("addCalendarCode").value = ""; });
 $("addLinkForm").addEventListener("submit", async (event) => {
   event.preventDefault();
+  if ($("saveAddLink").disabled) return;
+  for (const input of $("addCalendarRows").querySelectorAll("input")) {
+    input.value = input.value.trim();
+  }
+  if (!$("addLinkForm").reportValidity()) return;
   if ($("addCodeSection").hidden) {
     $("addCodeSection").hidden = false;
     $("addCalendarCode").required = true;
@@ -2055,27 +2098,39 @@ $("addLinkForm").addEventListener("submit", async (event) => {
   const button = $("saveAddLink");
   button.disabled = true;
   $("cancelAddLink").disabled = true;
-  button.textContent = "Saving...";
+  button.textContent = "Importing...";
+  const rows = [...$("addCalendarRows").children];
+  const code = $("addCalendarCode").value;
+  $("addLinkForm").querySelectorAll("input, button").forEach(control => { control.disabled = true; });
+  let saved = 0;
   $("addLinkError").textContent = "";
   $("addLinkError").style.display = "none";
   try {
-    const response = await fetch("/api/calendar-links", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: $("addCalendarName").value.trim(), link: $("addCalendarLink").value.trim(), code: $("addCalendarCode").value }),
-      signal: AbortSignal.timeout(45000),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Unable to save the calendar.");
+    for (const row of rows) {
+      const response = await fetch("/api/calendar-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: row.querySelector('[name="name"]').value, link: row.querySelector('[name="link"]').value, code }),
+        signal: AbortSignal.timeout(45000),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to save the calendar.");
+      saved++;
+      // Keep only unsaved rows if a later calendar fails, so retries cannot resubmit saved rows.
+      row.remove();
+    }
     $("addLinkDialog").close();
-    toast("Calendar link saved.");
+    toast(`${saved} calendar${saved === 1 ? "" : "s"} imported.`);
     await loadCalendarConfiguration();
   } catch (error) {
-    $("addLinkError").textContent = error.name === "TimeoutError" ? "Save timed out. Reload to check whether the link was saved before retrying." : error.message;
+    $("addLinkError").textContent = (saved ? `${saved} calendar${saved === 1 ? "" : "s"} imported. ` : "") + (error.name === "TimeoutError" ? "Save timed out. Reload to check whether the link was saved before retrying." : error.message);
     $("addLinkError").style.display = "block";
     $("addCalendarCode").value = "";
-    if ($("addLinkDialog").open) $("addCalendarCode").focus();
+    if (saved) await loadCalendarConfiguration();
   } finally {
+    $("addLinkForm").querySelectorAll("input, button").forEach(control => { control.disabled = false; });
+    updateCalendarRowControls();
+    if ($("addLinkDialog").open) $("addCalendarCode").focus();
     button.disabled = false;
     $("cancelAddLink").disabled = false;
     button.textContent = "Confirm & save";

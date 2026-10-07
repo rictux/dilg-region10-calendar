@@ -1226,35 +1226,34 @@ textarea {
 }
 [hidden] { display: none !important; }
 
-/* Calendar forms share the dashboard's ink and mint, with a quieter paper surface. */
-#addLinkForm input:focus-visible { outline: 3px solid #3f9b7b40; outline-offset: 3px; border-color: #438a72; }
-#addLinkDialog { width: min(560px, calc(100vw - 32px)); border: 1px solid #cbd8d3; border-radius: 20px; background: #fffefa; max-height: calc(100svh - 32px); }
-#addLinkDialog::backdrop { background: #0b252bcc; backdrop-filter: blur(6px); }
-#addLinkForm { padding: 0; }
-.add-link-heading { display: flex; align-items: center; gap: 18px; padding: 27px 30px; background: #153c4a; color: #fffefa; }
-.add-link-icon { display: grid; place-items: center; flex: 0 0 52px; height: 56px; border: 1px solid #779b964f; border-radius: 13px; color: #95e4c4; background: #244c58; }
-.add-link-icon svg { width: 29px; height: 29px; }
-#addLinkForm h2 { color: #fffefa; font-size: 25px; letter-spacing: -.6px; margin: 0 0 5px; }
-#addLinkForm .add-link-heading p { color: #c0d4d1; margin: 0; font-size: 13px; }
-.add-link-fields { padding: 30px; }
-.calendar-field { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; }
-.calendar-field + .calendar-field { margin-top: 25px; }
-.field-number { color: #518171; font-size: 11px; font-weight: 700; letter-spacing: .06em; padding-top: 3px; }
-#addLinkForm label { color: #24483f; font-size: 13px; margin-bottom: 9px; }
-#addLinkForm input { min-height: 48px; border: 1px solid #ccd8d0; background: #f8faf6; border-radius: 9px; padding: 12px 14px; font-size: 14px; }
-#addLinkForm input::placeholder { color: #7c8b84; }
-#addLinkForm .field-note { color: #6b7f75; font-size: 12px; line-height: 1.5; margin: 8px 0 0; }
-#addCodeSection { margin-top: 24px; padding: 18px; border: 1px solid #b8d5c6; border-radius: 12px; background: #eef6ef; }
-.confirm-caption { display: block; margin-bottom: 10px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; color: #4d7864; }
-#addLinkForm #addLinkError { color: #9b3e2a; margin: 16px 0 0; }
-#addLinkForm .modal-actions { padding: 18px 30px; background: #f0f4ee; border-top: 1px solid #dce5dc; gap: 10px; }
-#addLinkForm .modal-actions button { min-height: 44px; padding-inline: 22px; border-radius: 9px; }
-#saveAddLink { background: #153c4a; border-color: #153c4a; color: #fffefa; }
-#saveAddLink:hover:not(:disabled) { background: #245969; }
-#addLinkForm button:disabled { opacity: .6; cursor: wait; }
+/* Shared calendar import form. */
+#addLinkDialog { width: min(620px, calc(100vw - 32px)); max-height: calc(100svh - 32px); background: #fff; color: #1e3549; }
+#addLinkForm { padding: 25px; }
+#addLinkForm h2 { font-size: 26px; margin-bottom: 8px; }
+#addLinkForm > p { color: #708499; }
+#addCalendarRows { display: grid; gap: 12px; }
+.shared-calendar-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr) 38px; align-items: end; gap: 10px; padding: 14px; border: 1px solid #d7e3ed; border-radius: 12px; background: #f5f8fb; }
+.shared-calendar-row > div { min-width: 0; }
+#addLinkForm label { color: #173b58; font-size: 13px; }
+#addLinkForm input { height: 45px; border-color: #d7e3ed; background: #fff; font-size: 16px; }
+#addLinkForm input::placeholder { color: #708499; opacity: 1; }
+#addLinkForm :is(input, button):focus-visible { outline: 3px solid #3678de70; outline-offset: 3px; }
+#addLinkForm .remove-calendar { padding: 0; width: 38px; height: 42px; margin-bottom: 1px; justify-content: center; color: #61798c; border-color: #d7e3ed; }
+#addLinkForm .remove-calendar:disabled { opacity: .3; cursor: default; }
+#addAnotherCalendar { margin: 12px 0 16px; min-height: 43px; padding: 9px 13px; border: 1px dashed #80add4; background: #f5f9fd; color: #246a94; font-weight: 700; gap: 8px; }
+#addAnotherCalendar:hover:not(:disabled) { background: #eaf3fb; }
+#addLinkForm .link-help { background: #eff5f8; line-height: 1.4; gap: 6px; }
+#addCodeSection { margin: 0 0 18px; padding: 14px; border: 1px solid #d7e3ed; border-radius: 12px; background: #f5f8fb; }
+.confirm-caption { display: block; margin-bottom: 10px; font-size: 12px; font-weight: 700; color: #61798c; }
+#addLinkForm #addLinkError { color: #9b3e2a; margin: 0 0 18px; }
+#addLinkForm .modal-actions button { min-height: 43px; border-radius: 9px; padding-inline: 14px; border-color: #d7e3ed; }
+#addLinkForm #saveAddLink { background: #3777dd; border-color: #3777dd; color: #fff; }
+#addLinkForm #saveAddLink:hover:not(:disabled) { background: #2866c7; }
+#addLinkForm button:disabled { cursor: default; }
 @media (max-width: 480px) {
-  .add-link-heading { padding: 23px 20px; gap: 14px; }
-  .add-link-fields { padding: 24px 20px; }
-  .calendar-field { grid-template-columns: 20px minmax(0, 1fr); gap: 8px; }
-  #addLinkForm .modal-actions { padding: 16px 20px; }
+  #addLinkForm { padding: 20px; }
+  #addLinkForm h2 { font-size: 24px; }
+  .shared-calendar-row { grid-template-columns: minmax(0, 1fr) 38px; }
+  .shared-calendar-row > div { grid-column: 1; }
+  .shared-calendar-row .remove-calendar { grid-column: 2; grid-row: 2; }
 }
