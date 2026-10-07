@@ -1471,17 +1471,44 @@ function renderAgenda(ev) {
       '<div class="empty"><strong>Your schedule is clear</strong>No activities found for the selected period and calendars.</div>';
     return;
   }
+  // Multi-day activities get their own group titled with the full span.
   const groups = ev.reduce((o, e) => {
-    const k = localKey(eventDate(e));
+    const k = localKey(eventDate(e)) + "|" + localKey(lastDay(e));
     (o[k] ??= []).push(e);
     return o;
   }, {});
   $("agenda").innerHTML = Object.entries(groups)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([k, items]) => {
-      const d = new Date(k + "T00:00:00Z");
-      return `<div class="day-group"><div class="day-title"><strong>${fmtDate(d, { weekday: "long", month: "long", day: "numeric" })}</strong><span>${items.length} ${items.length === 1 ? "activity" : "activities"}</span></div>${items.map(eventRow).join("")}</div>`;
+      const [from, to] = k
+        .split("|")
+        .map((x) => new Date(x + "T00:00:00Z"));
+      const title =
+        from.getTime() === to.getTime()
+          ? fmtDate(from, { weekday: "long", month: "long", day: "numeric" })
+          : shortDay(from, from.getUTCFullYear() !== to.getUTCFullYear()) +
+            " – " +
+            shortDay(to, from.getUTCFullYear() !== to.getUTCFullYear());
+      return `<div class="day-group"><div class="day-title"><strong>${title}</strong><span>${items.length} ${items.length === 1 ? "activity" : "activities"}</span></div>${items.map(eventRow).join("")}</div>`;
     })
     .join("");
+}
+// Last calendar day an activity occupies. All-day end dates are exclusive,
+// and a timed activity ending at midnight does not occupy the next day.
+function lastDay(e) {
+  const end = startOfDay(new Date(eventEnd(e) - 1));
+  return end < startOfDay(eventDate(e)) ? startOfDay(eventDate(e)) : end;
+}
+// "Tue Oct 6", or "Tue Oct 6, 2026" when a span crosses years.
+function shortDay(d, withYear) {
+  return (
+    fmtDate(d, { weekday: "short" }) +
+    " " +
+    fmtDate(d, { month: "short" }) +
+    " " +
+    d.getUTCDate() +
+    (withYear ? ", " + d.getUTCFullYear() : "")
+  );
 }
 function eventRow(e) {
   const time = isAllDay(e)
