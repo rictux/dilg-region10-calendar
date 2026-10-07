@@ -1298,7 +1298,11 @@ function renderConflicts(pairs) {
           const shared = [...x.sharedFac, ...x.sharedPart]
             .slice(0, 3)
             .join(", ");
-          return `<div class="conflict-item"><span class="conflict-time">${fmtDate(x.start, { month: "short", day: "numeric" })}<br>${fmtDate(x.start, { hour: "numeric", minute: "2-digit" })}–${fmtDate(x.end, { hour: "numeric", minute: "2-digit" })}</span><div class="conflict-pair"><strong>${esc(x.a.summary)} ↔ ${esc(x.b.summary)}</strong>${esc(x.a.offices.join(", "))} and ${esc(x.b.offices.join(", "))}${shared ? ` · Shared: ${esc(shared)}` : ""}</div><span class="conflict-badge">${esc(x.basis)}</span></div>`;
+          const officeList = new Intl.ListFormat("en", { style: "long", type: "conjunction" });
+          const activities = [x.a, x.b].map((activity) =>
+            `<li><strong>${esc(activity.summary)}</strong><div class="conflict-offices">${esc(officeList.format([...new Set(activity.offices)]))}</div></li>`,
+          ).join("");
+          return `<div class="conflict-item"><span class="conflict-time">${fmtDate(x.start, { month: "short", day: "numeric" })}<br>${fmtDate(x.start, { hour: "numeric", minute: "2-digit" })}–${fmtDate(x.end, { hour: "numeric", minute: "2-digit" })}</span><div class="conflict-pair"><ul class="conflict-activities" aria-label="Overlapping activities">${activities}</ul>${shared ? `<div class="conflict-shared">Shared: ${esc(shared)}</div>` : ""}</div><span class="conflict-badge">${esc(x.basis)}</span></div>`;
         })
         .join("")
     : '<div class="empty"><strong>No concurrent activities</strong>No different activities run at overlapping times in this period.</div>';
@@ -1846,12 +1850,50 @@ async function loadCalendarConfiguration() {
       : error.message;
   }
 }
+// Decorative placeholders reuse the dashboard's grids without exposing fake data.
+function skeleton(width = "100%", variant = "") {
+  return `<span class="skeleton ${variant}" style="width:${width}" aria-hidden="true"></span>`;
+}
+function skeletonLines(count = 3) {
+  return `<div class="skeleton-lines" aria-hidden="true">${Array.from({ length: count }, (_, i) => skeleton(i === count - 1 ? "65%" : "100%")).join("")}</div>`;
+}
+function renderSkeletons() {
+  for (const id of ["metricEvents", "metricMerged", "metricOffices", "metricFourth", "metricConcurrent"])
+    $(id).innerHTML = skeleton("64px", "skeleton-number");
+  for (const id of ["agendaCount", "conflictCount"])
+    $(id).innerHTML = skeleton("80px");
+  $("summaryLead").innerHTML = skeletonLines(2);
+  $("insights").innerHTML = skeletonLines(3);
+  $("breakdown").innerHTML = Array.from({ length: 5 }, (_, i) =>
+    `<div class="bar-row" aria-hidden="true">${skeleton("85%")}${skeleton(`${100 - i * 14}%`)}${skeleton("20px")}</div>`,
+  ).join("");
+  $("analytics").innerHTML = ["Delivery format", "Event level", "Most-used physical venues"]
+    .map((title) => `<section class="analytics-block"><h3>${title}</h3>${skeletonLines(4)}</section>`).join("");
+  for (const id of ["officeTiles", "stakeholders"])
+    $(id).innerHTML = Array.from({ length: 6 }, () =>
+      `<div class="skeleton-tile" aria-hidden="true">${skeleton("40px", "skeleton-number")}${skeleton("75%")}</div>`,
+    ).join("");
+  $("groupFilterStatus").textContent = "Loading organization groups…";
+  $("conflicts").innerHTML = skeletonLines(4);
+  $("suggestions").innerHTML = skeletonLines(3);
+  const groups = state.view === "day" ? 1 : state.view === "year" ? 3 : 2;
+  $("agenda").innerHTML = Array.from({ length: groups }, () =>
+    `<div class="day-group" aria-hidden="true"><div class="day-title">${skeleton("45%")}${skeleton("70px")}</div>${Array.from({ length: 2 }, () => `<div class="skeleton-event">${skeleton("65px")}<div>${skeletonLines(3)}</div></div>`).join("")}</div>`,
+  ).join("");
+}
 function renderAvailability() {
+  $("dashboard").setAttribute("aria-busy", String(loading));
+  const status = loading ? "Loading calendar activities…" : "";
+  if ($("loadingStatus").textContent !== status) $("loadingStatus").textContent = status;
   $("addLinkBtn").disabled = loading;
   const unavailable = loading || !state.connected;
   $("prevBtn").disabled = loading;
   $("nextBtn").disabled = loading;
   $("todayBtn").disabled = loading;
+  if (loading) {
+    renderSkeletons();
+    return;
+  }
   if (unavailable) {
     for (const id of [
       "metricEvents",
