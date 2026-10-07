@@ -6,7 +6,7 @@ test("Add Link asks for its own code at save and refreshes the calendars", async
   await page.route("**/api/calendar-links", route => {
     if (route.request().method() === "GET") return route.fulfill({ json: { calendars } });
     const body = route.request().postDataJSON();
-    expect(route.request().headers().authorization).toBe("Bearer test-page-token");
+    expect(route.request().headers().authorization).toBeUndefined();
     if (body.code !== "test-add-code") return route.fulfill({ status: 403, json: { error: "Incorrect Add Link code. Please try again." } });
     calendars.push({ id: "2", name: body.name, link: body.link });
     saves++;
