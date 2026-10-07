@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { calendarSource, parseCalendar } from "../calendar.js";
-import app, { app as namedApp } from "../server.js";
+import app, { app as namedApp, accessControl } from "../server.js";
 
 test("server exposes the Express handler as the default deployment export", () => {
   assert.equal(typeof app, "function");
@@ -90,6 +90,7 @@ END:VCALENDAR`;
   });
 });
 test("API validates range and serves only public assets", async (t) => {
+  t.mock.method(accessControl, "require", (req, res, next) => next());
   const server = app.listen(0, "127.0.0.1");
   t.after(() => server.close());
   await new Promise((resolve) => server.once("listening", resolve));

@@ -1,0 +1,50 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import express from "express";
+import { createAccessControl } from "../access.js";
+import app from "../server.js";
+
+test("access verification, expiry, tampering, rotation, and throttling", async (t) => {
+  let current = { id: 1, code: "test-only-code" };
+  let time = Date.now();
+  const access = createAccessControl({ readCode: async () => current, getSecret: () => "test-signing-secret", now: () => time });
+  const serverApp = express();
+  serverApp.use(express.json());
+  serverApp.post("/api/access", access.login);
+  serverApp.get("/protected", access.require, (req, res) => res.json({ ok: true }));
+  const server = serverApp.listen(0, "127.0.0.1");
+  await new Promise(resolve => server.once("listening", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = code => fetch(base + "/api/access", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+  const read = token => fetch(base + "/protected", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  assert.equal((await read()).status, 401);
+  assert.equal((await login("wrong")).status, 401);
+  const accepted = await login("test-only-code");
+  assert.equal(accepted.status, 200);
+  assert.equal(accepted.headers.get("cache-control"), "no-store");
+  const { token } = await accepted.json();
+  assert.doesNotMatch(Buffer.from(token.split(".")[0], "base64url").toString(), /test-only-code/);
+  assert.equal((await read(token)).status, 200);
+  assert.equal((await read(token + "tampered")).status, 401);
+  time += 8 * 3600000 + 1;
+  assert.equal((await read(token)).status, 401);
+  const renewed = (await (await login("test-only-code")).json()).token;
+  current = { id: 2, code: "rotated-code" };
+  assert.equal((await read(renewed)).status, 401);
+  for (let i = 0; i < 10; i++) assert.equal((await login("wrong")).status, 401);
+  assert.equal((await login("wrong")).status, 429);
+  time += 60001;
+  assert.equal((await login("rotated-code")).status, 200);
+});
+
+test("real calendar endpoints reject unauthenticated requests", async (t) => {
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise(resolve => server.once("listening", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  assert.equal((await fetch(base + "/api/calendar-links")).status, 401);
+  assert.equal((await fetch(base + "/api/calendar-preload/open", { method: "POST" })).status, 401);
+  assert.equal((await fetch(base + "/api/calendar-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: "add-code" }) })).status, 401);
+  assert.equal((await fetch(base + "/api/calendar-feed", { method: "POST" })).status, 401);
+});

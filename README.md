@@ -8,19 +8,74 @@ Requires Node.js 22 or newer.
 
 ```sh
 npm ci
+cp .env.example .env
+# Fill in your VPS Supabase API URL and publishable/anon key in .env.
 npm start
 ```
 
 Open http://localhost:3000. Use `npm run dev` to restart the server automatically after backend edits. Serve the HTML through Node; opening it directly cannot access the calendar-feed API.
 
+The server reads `supabase_url` and `supabase_publishable_key` from `.env` or
+environment variables. Use the VPS HTTPS API origin, not the PostgreSQL SSH
+tunnel. The server queries Supabase's `/rest/v1/calendar_links` endpoint with
+`Accept-Profile: system_calendar`; the browser reads `/api/calendar-links` from
+this app. Keys stay on the server. A legacy anon JWT also works in
+`supabase_publishable_key` for older self-hosted stacks. Uppercase
+`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_ANON_KEY` are supported
+as fallbacks. Restart the app after changing `.env`.
+
+Expose `system_calendar` in the VPS REST service configuration and apply the
+schema and seed migrations described in [supabase/README.md](supabase/README.md).
+After code verification, `/api/calendar-links` returns a `calendars` array with
+`id`, `name`, and `link`. Requests without a valid access token return HTTP 401.
+Missing configuration or an upstream failure returns HTTP 503.
+
+## Calendar access code
+
+Each page opening or refresh shows **Input current Auth Code:**. The server
+checks the most recent `system_calendar.auth_code` row where `used_for = 'access'`,
+ordered by `created_at DESC, id DESC`. The code is case-sensitive. The frontend
+never downloads the stored code and keeps its access token only in page memory.
+Tokens expire after eight hours; changing the current code invalidates them on
+the next calendar request.
+
+While the code prompt is visible, the server preloads the current Manila year's
+configured calendars. The browser receives only an AES-GCM encrypted snapshot;
+decrypting it requires a valid access token on the server. Snapshots expire after
+five minutes and can be opened by another Vercel instance using the same server
+key. Concurrent preloads share work within an instance, with a one-minute reuse
+window. No event data is stored in browser storage before verification.
+After a correct code, the dashboard opens when the available activity data is
+ready. Failed, expired, or oversized preloads fall back to normal authenticated
+requests; unavailable individual feeds retain their failure indicators.
+
+Set `supabase_secret_key` in the server `.env` or hosting environment to the VPS
+secret key or legacy service-role key. It is required because the anon key must
+not read `auth_code`. Never place this key in `public/` or browser configuration.
+If needed, run `scripts/migrate-calendar.ps1 -AuthOnly` through the existing SSH
+tunnel to create the table and restrict it to server-side reads. Existing rows
+are preserved. Maintain the current code in the database, not source control.
+
+Incorrect code attempts are limited to ten per minute per server-observed IP,
+per process. For multiple app instances, enforce a shared limit at the reverse
+proxy. Proxy trust is not enabled automatically.
+
+The **Add Link** button opens a Name and Link form. Clicking Save asks for the
+current code where `used_for = 'add'`; the page-access code does not authorize
+inserts. Both checks run on the server, and the stored codes are never sent to
+the browser. Successful saves refresh the calendar list and events. Public
+Google links are normalized to public iCal URLs, and duplicate calendar IDs
+are rejected. `service_role` needs INSERT access to `calendar_links`, as granted
+by the original migration. The server-only key is required for this operation.
+
 ## Included calendars
 
-The ten supplied links are preloaded in `public/app.js`: LGMED 10, RICTU CALENDAR (decoded from the subscription link), Planning, Quality Management, Region10 Personnel Calendar, PDMU (dilg10pdmu@gmail.com), LGCDD (lgcdd10dilg@gmail.com), Legal (legaldilg10@gmail.com), BAC -DILG (bacdilgr10@gmail.com), and ORD (orddilg10@gmail.com). Display names come from the actual Google feeds, with Legal, BAC -DILG and ORD explicitly labeled as configured. All five original public feeds were successfully checked during implementation.
+The seed migration contains the ten original calendars: LGMED, RICTU, Planning, Quality Management, Personnel, PDMU, LGCDD, Legal, BAC -DILG, and ORD. The frontend loads names and links from `system_calendar.calendar_links` on each page load. Stored names override Google feed titles. Edit the database records to change the configured calendars. The current dashboard supports up to 15 calendars, sorted by name; duplicate Google calendar IDs are rejected.
 
 - The full current year loads once when the page opens or refreshes. Today, Week, Month, and Year reuse that data without importing again. Weeks run Monday through Sunday in Asia/Manila. A week crossing New Year loads its complete seven-day range; leaving that boundary week reloads the selected year's data. Navigating to a different year automatically loads its full year. Requests use Asia/Manila boundaries and are limited to 366 days, including leap years.
 - Recurring events, exceptions, moved instances, cancellations, and all-day dates are handled by node-ical.
 - Displayed dates and times use Asia/Manila, even on devices in other timezones.
-- Calendar links load automatically from the configured defaults or previously saved browser settings. The server does not persist links or event data.
+- Calendar links and names come from Supabase. Old browser-saved links no longer override them. Empty or unavailable storage shows an explicit message; the app does not fall back to hardcoded calendars. Event data is fetched from Google and is not stored in Supabase.
 - Reloading the page retrieves updates. Partial failures stay visible; unavailable feeds are excluded from statistics and identified in exports.
 - Categories, delivery formats, stakeholders, and event levels are keyword-based estimates. Conflicts indicate overlapping timed entries, not confirmed attendee conflicts. Remaining capacity subtracts scheduled hours from eight hours; it does not calculate free time slots.
 - Possible duplicates across selected office calendars are consolidated using title, time, venue, facilitators, participants, and focal persons. Matches are estimates and are marked in the activity details; original calendar entries are unchanged.
@@ -62,7 +117,7 @@ Google secret iCal links are also accepted. These links are credentials: if ente
 - test/: backend validation and calendar fixtures.
 - e2e/: live-feed smoke test and simulated failure-state test.
 
-Deploy on a Node-capable host using `npm ci --omit=dev` and `npm start`. Set HOST=0.0.0.0 and the host-provided PORT, and serve through HTTPS. Static-only hosting cannot run the feed endpoint. Apply organizational access controls and request rate limits at the reverse proxy for an internal deployment. The app does not provide user accounts or a database.
+Deploy on a Node-capable host using `npm ci --omit=dev` and `npm start`. Set HOST=0.0.0.0 and the host-provided PORT, and serve through HTTPS. Static-only hosting cannot run the feed endpoint. Apply organizational access controls and request rate limits at the reverse proxy for an internal deployment. The app does not provide user accounts.
 
 ### Vercel
 
@@ -70,7 +125,7 @@ The repository includes `vercel.json` selecting the Express framework. `server.j
 
 1. Deploy the repository root, containing `package.json`, `server.js`, and `vercel.json`.
 2. Use the **Express** framework preset. Leave Build Command and Output Directory overrides disabled; this project does not generate a `dist` directory. The default dependency installation is sufficient.
-3. Redeploy the updated commit. Check `/` for the dashboard and submit a calendar request to `/api/calendar-feed` to verify the backend.
+3. Set `supabase_url` and `supabase_publishable_key` in the Vercel project environment variables, then redeploy the updated commit. Check `/` for the dashboard and submit a calendar request to `/api/calendar-feed` to verify the backend.
 
 For `FUNCTION_INVOCATION_FAILED`, inspect the failed deployment's Runtime Logs for the first exception. The generic 500 page and request ID do not identify the underlying cause. See [Vercel's Express documentation](https://vercel.com/docs/frameworks/backend/express).
 

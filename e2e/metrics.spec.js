@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 test("summary cards consolidate office reports before counting concurrency", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-09-22T04:00:00Z") });

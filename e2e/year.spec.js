@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 test("annual view loads the whole Manila year and navigates between years", async ({ page }) => {
   const requests = [];
