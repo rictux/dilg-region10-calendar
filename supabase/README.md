@@ -46,11 +46,9 @@ history or replay migrations belonging to the regional-hris project.
 
 ## Frontend access
 
-The page requires the current code from `system_calendar.auth_code` with
-`used_for = 'access'`. Set server-only `supabase_secret_key` to enable verification.
-The auth migration can be applied separately with
-`.\scripts\migrate-calendar.ps1 -AuthOnly`; it preserves existing codes and
-revokes client-role access to the table. No access code is committed in migrations.
+The dashboard opens without an access code. Adding a link requires the code
+where `used_for = 'add'` and the server-only `supabase_secret_key`. Existing
+access-code rows are preserved but no longer used for page access.
 
 The frontend calls this app's `/api/calendar-links` endpoint. The server fetches
 the names and links through the VPS Supabase Data API, then the frontend loads

@@ -4,62 +4,6 @@ function manilaNow() {
 }
 
 const calendarNames = new Map();
-let accessToken = "";
-let preparedCalendars = null;
-let preparedFeeds = new Map();
-// Only an encrypted snapshot is downloaded before the code is verified.
-const backgroundCalendars = fetch("/api/calendar-preload", {
-  method: "POST", signal: AbortSignal.timeout(35000),
-}).then(async response => response.ok ? (await response.json()).sealed : null).catch(() => null);
-
-async function usePreparedCalendars() {
-  const sealed = await backgroundCalendars;
-  if (!sealed) return;
-  try {
-    const response = await calendarRequest("/api/calendar-preload/open", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sealed }), signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) return;
-    const data = await response.json();
-    const range = requestRange();
-    if (data.from !== range.from || data.to !== range.to) return;
-    preparedCalendars = { calendars: data.calendars };
-    preparedFeeds = new Map(data.feeds.map(feed => [feed.link, feed]));
-  } catch { /* Normal authenticated loading remains available. */ }
-}
-
-function showAccessGate(message = "") {
-  if ($("addLinkDialog").open) $("addLinkDialog").close();
-  accessToken = "";
-  preparedCalendars = null;
-  preparedFeeds.clear();
-  requestVersion++;
-  loading = false;
-  calendarListLoaded = false;
-  state.connected = false;
-  state.events = [];
-  state.calendars = [];
-  state.selected.clear();
-  $("calendarApp").hidden = true;
-  $("calendarApp").inert = true;
-  $("accessGate").hidden = false;
-  $("accessError").textContent = message;
-  $("authCode").value = "";
-  $("authCode").focus();
-}
-
-async function calendarRequest(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: { ...options.headers, Authorization: `Bearer ${accessToken}` },
-  });
-  if (response.status === 401) {
-    showAccessGate("Please enter the current Auth Code to continue.");
-    throw new Error("Calendar access has expired.");
-  }
-  return response;
-}
 function safeRead(key) {
   try {
     return localStorage.getItem(key);
@@ -1868,16 +1812,12 @@ async function loadCalendarConfiguration() {
   render();
   $("sideStatus").textContent = "Loading calendar list...";
   try {
-    let data = preparedCalendars;
-    preparedCalendars = null;
-    if (!data) {
-    const response = await calendarRequest("/api/calendar-links", {
+    const response = await fetch("/api/calendar-links", {
       cache: "no-store",
       signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) throw new Error("Calendar list could not be loaded. Reload to retry or contact the administrator.");
-    data = await response.json();
-    }
+    const data = await response.json();
     if (!Array.isArray(data.calendars) || data.calendars.length > 15 ||
       data.calendars.some((row) => !row || typeof row.name !== "string" || !row.name.trim() || typeof row.link !== "string")) {
       throw new Error("Calendar list is invalid. Contact the administrator.");
@@ -1907,7 +1847,7 @@ async function loadCalendarConfiguration() {
   }
 }
 function renderAvailability() {
-  $("addLinkBtn").disabled = loading || !accessToken;
+  $("addLinkBtn").disabled = loading;
   const unavailable = loading || !state.connected;
   $("prevBtn").disabled = loading;
   $("nextBtn").disabled = loading;
@@ -1980,23 +1920,15 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
   render();
   const results = await Promise.allSettled(
     links.map(async (link, i) => {
-      const prepared = preparedFeeds.get(link);
-      preparedFeeds.delete(link);
-      let data;
-      if (prepared) {
-        if (prepared.error) throw new Error(prepared.error);
-        data = prepared.data;
-      } else {
-      const response = await calendarRequest("/api/calendar-feed", {
+      const response = await fetch("/api/calendar-feed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: link, ...range }),
         signal: AbortSignal.timeout(30000),
       });
-      data = await response.json();
+      const data = await response.json();
       if (!response.ok)
         throw Error(data.error || "Calendar could not be loaded.");
-      }
       const color = COLORS[i % COLORS.length];
       data.calendar.backgroundColor = color;
       const name = calendarNames.get(link);
@@ -2127,7 +2059,7 @@ $("addLinkForm").addEventListener("submit", async (event) => {
   $("addLinkError").textContent = "";
   $("addLinkError").style.display = "none";
   try {
-    const response = await calendarRequest("/api/calendar-links", {
+    const response = await fetch("/api/calendar-links", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: $("addCalendarName").value.trim(), link: $("addCalendarLink").value.trim(), code: $("addCalendarCode").value }),
@@ -2152,39 +2084,4 @@ $("addLinkForm").addEventListener("submit", async (event) => {
 $("addLinkDialog").addEventListener("cancel", event => {
   if ($("saveAddLink").disabled) event.preventDefault();
 });
-$("accessForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const button = $("accessSubmit");
-  button.disabled = true;
-  button.textContent = "Checking...";
-  $("accessError").textContent = "";
-  try {
-    const response = await fetch("/api/access", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: $("authCode").value }),
-      signal: AbortSignal.timeout(15000),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Unable to verify the Auth Code.");
-    if (typeof data.token !== "string" || !data.token) throw new Error("Unable to verify the Auth Code.");
-    accessToken = data.token;
-    $("authCode").value = "";
-    button.textContent = "Preparing calendar...";
-    await usePreparedCalendars();
-    if (!accessToken) return;
-    await loadCalendarConfiguration();
-    if (!accessToken) return;
-    $("accessGate").hidden = true;
-    $("calendarApp").hidden = false;
-    $("calendarApp").inert = false;
-    $("pageTitle").setAttribute("tabindex", "-1");
-    $("pageTitle").focus();
-  } catch (error) {
-    $("accessError").textContent = error.name === "TimeoutError" ? "Verification timed out. Please try again." : error.message;
-    $("authCode").focus();
-  } finally {
-    button.disabled = false;
-    button.textContent = "Open calendar";
-  }
-});
+loadCalendarConfiguration();

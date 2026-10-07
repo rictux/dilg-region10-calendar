@@ -26,47 +26,19 @@ as fallbacks. Restart the app after changing `.env`.
 
 Expose `system_calendar` in the VPS REST service configuration and apply the
 schema and seed migrations described in [supabase/README.md](supabase/README.md).
-After code verification, `/api/calendar-links` returns a `calendars` array with
-`id`, `name`, and `link`. Requests without a valid access token return HTTP 401.
-Missing configuration or an upstream failure returns HTTP 503.
+The dashboard opens and loads calendars immediately, without a page-access code.
+GET /api/calendar-links and POST /api/calendar-feed are public read endpoints.
 
-## Calendar access code
+## Add Link code
 
-Each page opening or refresh shows **Input current Auth Code:**. The server
-checks the most recent `system_calendar.auth_code` row where `used_for = 'access'`,
-ordered by `created_at DESC, id DESC`. The code is case-sensitive. The frontend
-never downloads the stored code and keeps its access token only in page memory.
-Tokens expire after eight hours; changing the current code invalidates them on
-the next calendar request.
+The **Add Link** button opens a Name and Link form. Saving requires the current
+code from system_calendar.auth_code where used_for = 'add', verified server-side.
+The server-only supabase_secret_key is required for adding links, but is not
+required for viewing the calendar. Existing used_for = 'access' rows are unused
+and have not been deleted. Calendar loading starts directly when the dashboard opens.
 
-While the code prompt is visible, the server preloads the current Manila year's
-configured calendars. The browser receives only an AES-GCM encrypted snapshot;
-decrypting it requires a valid access token on the server. Snapshots expire after
-five minutes and can be opened by another Vercel instance using the same server
-key. Concurrent preloads share work within an instance, with a one-minute reuse
-window. No event data is stored in browser storage before verification.
-After a correct code, the dashboard opens when the available activity data is
-ready. Failed, expired, or oversized preloads fall back to normal authenticated
-requests; unavailable individual feeds retain their failure indicators.
-
-Set `supabase_secret_key` in the server `.env` or hosting environment to the VPS
-secret key or legacy service-role key. It is required because the anon key must
-not read `auth_code`. Never place this key in `public/` or browser configuration.
-If needed, run `scripts/migrate-calendar.ps1 -AuthOnly` through the existing SSH
-tunnel to create the table and restrict it to server-side reads. Existing rows
-are preserved. Maintain the current code in the database, not source control.
-
-Incorrect code attempts are limited to ten per minute per server-observed IP,
-per process. For multiple app instances, enforce a shared limit at the reverse
-proxy. Proxy trust is not enabled automatically.
-
-The **Add Link** button opens a Name and Link form. Clicking Save asks for the
-current code where `used_for = 'add'`; the page-access code does not authorize
-inserts. Both checks run on the server, and the stored codes are never sent to
-the browser. Successful saves refresh the calendar list and events. Public
-Google links are normalized to public iCal URLs, and duplicate calendar IDs
-are rejected. `service_role` needs INSERT access to `calendar_links`, as granted
-by the original migration. The server-only key is required for this operation.
+Incorrect Add Link attempts are limited to ten per minute per server-observed IP,
+per process. Duplicate calendar IDs and private links are rejected.
 
 ## Included calendars
 

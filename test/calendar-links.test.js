@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fetchCalendarLinks } from "../calendar-links.js";
-import app, { accessControl } from "../server.js";
+import app from "../server.js";
 
 const row = {
   id: "6f8c730b-7936-4975-9102-21a9e9258949",
@@ -65,7 +65,6 @@ test("empty table returns an empty list", async () => {
 });
 
 test("HTTP endpoint returns database records and hides upstream failures", async (t) => {
-  t.mock.method(accessControl, "require", (req, res, next) => next());
   const originalUrl = process.env.supabase_url;
   const originalKey = process.env.supabase_publishable_key;
   process.env.supabase_url = options.url;
