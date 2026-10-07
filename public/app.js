@@ -1133,10 +1133,11 @@ function formatHours(n) {
     m = Math.round((n - h) * 60);
   return h + (m ? "h " + m + "m" : "h");
 }
+// Counts each day an activity is listed on, matching the agenda.
 function byDay(ev) {
+  const [a, b] = range();
   return ev.reduce((o, e) => {
-    const k = localKey(eventDate(e));
-    o[k] = (o[k] || 0) + 1;
+    for (const { key } of agendaDays(e, a, b)) o[key] = (o[key] || 0) + 1;
     return o;
   }, {});
 }
@@ -1471,51 +1472,79 @@ function renderAgenda(ev) {
       '<div class="empty"><strong>Your schedule is clear</strong>No activities found for the selected period and calendars.</div>';
     return;
   }
-  // Multi-day activities get their own group titled with the full span.
-  const groups = ev.reduce((o, e) => {
-    const k = localKey(eventDate(e)) + "|" + localKey(lastDay(e));
-    (o[k] ??= []).push(e);
-    return o;
-  }, {});
-  $("agenda").innerHTML = Object.entries(groups)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([k, items]) => {
-      const [from, to] = k
-        .split("|")
-        .map((x) => new Date(x + "T00:00:00Z"));
-      const title =
-        from.getTime() === to.getTime()
-          ? fmtDate(from, { weekday: "long", month: "long", day: "numeric" })
-          : shortDay(from, from.getUTCFullYear() !== to.getUTCFullYear()) +
-            " – " +
-            shortDay(to, from.getUTCFullYear() !== to.getUTCFullYear());
-      return `<div class="day-group"><div class="day-title"><strong>${title}</strong><span>${items.length} ${items.length === 1 ? "activity" : "activities"}</span></div>${items.map(eventRow).join("")}</div>`;
+  const [a, b] = range(),
+    groups = {};
+  for (const e of ev)
+    for (const day of agendaDays(e, a, b)) (groups[day.key] ??= []).push([e, day]);
+  $("agenda").innerHTML = Object.keys(groups)
+    .sort()
+    .map((k) => {
+      const d = new Date(k + "T00:00:00Z"),
+        items = groups[k];
+      return `<div class="day-group"><div class="day-title"><strong>${fmtDate(d, { weekday: "long", month: "long", day: "numeric" })}</strong><span>${items.length} ${items.length === 1 ? "activity" : "activities"}</span></div>${items.map(([e, day]) => eventRow(e, day)).join("")}</div>`;
     })
     .join("");
 }
+// Activities up to this many days are repeated under each day they run;
+// longer ones are listed once as ongoing so they do not flood the list.
+const MAX_REPEAT_DAYS = 7;
 // Last calendar day an activity occupies. All-day end dates are exclusive,
 // and a timed activity ending at midnight does not occupy the next day.
 function lastDay(e) {
-  const end = startOfDay(new Date(eventEnd(e) - 1));
-  return end < startOfDay(eventDate(e)) ? startOfDay(eventDate(e)) : end;
+  const first = startOfDay(eventDate(e)),
+    end = startOfDay(new Date(eventEnd(e) - 1));
+  return end < first ? first : end;
 }
-// "Tue Oct 6", or "Tue Oct 6, 2026" when a span crosses years.
-function shortDay(d, withYear) {
-  return (
-    fmtDate(d, { weekday: "short" }) +
-    " " +
-    fmtDate(d, { month: "short" }) +
-    " " +
-    d.getUTCDate() +
-    (withYear ? ", " + d.getUTCFullYear() : "")
-  );
+// The days, within the period a–b, under which an activity is listed.
+function agendaDays(e, a, b) {
+  const first = startOfDay(eventDate(e)),
+    last = lastDay(e),
+    total = Math.round((last - first) / 864e5) + 1,
+    from = first < a ? startOfDay(a) : first,
+    to = last > b ? startOfDay(b) : last;
+  if (total > MAX_REPEAT_DAYS)
+    return [{ key: localKey(from), index: 0, total, ongoing: true }];
+  const days = [];
+  for (let d = new Date(from); d <= to; d.setUTCDate(d.getUTCDate() + 1))
+    days.push({
+      key: localKey(d),
+      index: Math.round((d - first) / 864e5) + 1,
+      total,
+      ongoing: false,
+    });
+  return days;
 }
-function eventRow(e) {
-  const time = isAllDay(e)
+// "Oct 6–8", "Sep 29 – Oct 2", or with years when the span crosses one.
+function spanLabel(e) {
+  const from = startOfDay(eventDate(e)),
+    to = lastDay(e),
+    years = from.getUTCFullYear() !== to.getUTCFullYear(),
+    md = (d) =>
+      fmtDate(d, { month: "short" }) +
+      " " +
+      d.getUTCDate() +
+      (years ? ", " + d.getUTCFullYear() : "");
+  return !years && from.getUTCMonth() === to.getUTCMonth()
+    ? md(from) + "–" + to.getUTCDate()
+    : md(from) + " – " + md(to);
+}
+function eventRow(e, day = { total: 1 }) {
+  const clock = (d) => fmtDate(d, { hour: "numeric", minute: "2-digit" }),
+    hours = isAllDay(e)
       ? "All day"
-      : fmtDate(eventDate(e), { hour: "numeric", minute: "2-digit" }) +
-        "–" +
-        fmtDate(eventEnd(e), { hour: "numeric", minute: "2-digit" }),
+      : day.total === 1
+        ? clock(eventDate(e)) + "–" + clock(eventEnd(e))
+        : day.ongoing
+          ? ""
+          : day.index === 1
+            ? "from " + clock(eventDate(e))
+            : day.index === day.total
+              ? "until " + clock(eventEnd(e))
+              : "All day",
+    time =
+      day.total === 1
+        ? hours
+        : `<span class="event-span">${day.ongoing ? "Ongoing" : `Day ${day.index} of ${day.total}`} · ${spanLabel(e)}</span>${hours}`,
     people = peopleInvolved(e),
     guests = expectedGuests(e),
     groups = stakeholderCategories(e),
