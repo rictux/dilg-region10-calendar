@@ -18,7 +18,7 @@ test("annual view loads the whole Manila year and navigates between years", asyn
   });
   await page.goto("/");
   await expect(page.locator("#sideStatus")).toHaveText("10 of 10 calendars loaded");
-  const initialLinks = requests.map(r => r.url);
+  const initialLinks = requests.slice(0, 10).map(r => r.url);
   await page.getByRole("button", { name: "Year", exact: true }).click();
   await expect(page.locator("#pageTitle")).toHaveText("Annual activity summary");
   await expect(page.locator("#metricEvents")).toHaveText("3");
@@ -27,11 +27,11 @@ test("annual view loads the whole Manila year and navigates between years", asyn
   expect(requests.slice(-10).map(r => r.url)).toEqual(initialLinks);
   expect(requests.at(-1)).toMatchObject({ from: "2026-01-01T00:00:00+08:00", to: "2027-01-01T00:00:00+08:00" });
   await expect(page.locator("#agenda")).toContainText("LGU meeting 12-15");
-  // All views within the loaded year reuse the initial ten feed requests.
+  // All views reuse the ten annual feeds prepared after the ten Today feeds.
   for (const view of ["Month", "Today", "Year", "Today", "Month", "Year"]) {
     await page.getByRole("button", { name: view, exact: true }).first().click();
     await expect(page.locator("#nextBtn")).toBeEnabled();
-    expect(requests).toHaveLength(10);
+    expect(requests).toHaveLength(20);
   }
   await page.locator("#nextBtn").click();
   await expect(page.locator("#periodTitle")).toHaveText("2027");
@@ -46,7 +46,8 @@ test("annual view loads the whole Manila year and navigates between years", asyn
   const beforeReload = requests.length;
   await page.reload();
   await expect(page.locator("#sideStatus")).toHaveText("10 of 10 calendars loaded");
-  expect(requests).toHaveLength(beforeReload + 10);
+  // Fresh IndexedDB feeds are reused across page reloads.
+  expect(requests).toHaveLength(beforeReload);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole("button", { name: "Year", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

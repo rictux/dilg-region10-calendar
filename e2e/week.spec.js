@@ -32,6 +32,7 @@ test("weekly view includes the full Manila week across New Year", async ({
   });
   await page.goto("/");
   await expect(page.locator("#metricEvents")).toHaveText("1");
+  await expect(page.locator("#backgroundStatus")).toContainText("ready for other views");
   await page.getByRole("button", { name: "Week", exact: true }).click();
   await expect(page.locator("#metricEvents")).toHaveText("3");
   await expect(page.locator("#pageTitle")).toHaveText("Weekly activity");
@@ -58,9 +59,13 @@ test("weekly view includes the full Manila week across New Year", async ({
     path: "test-results/weekly-mobile.png",
     fullPage: true,
   });
+  const beforeReturnToYear = requests.length;
   await page.locator("#nextBtn").click();
   await expect(page.locator("#metricEvents")).toHaveText("1");
-  expect(requests.at(-1)).toMatchObject({
+  await expect(page.locator("#backgroundStatus")).toContainText("ready for other views");
+  // The annual range prepared after Today loaded is still cached.
+  expect(requests).toHaveLength(beforeReturnToYear);
+  expect(requests[10]).toMatchObject({
     from: "2027-01-01T00:00:00+08:00",
     to: "2028-01-01T00:00:00+08:00",
   });
