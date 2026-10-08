@@ -24,7 +24,8 @@ test("database links and names override old browser settings and Google feed nam
   });
   await page.goto("/");
   await expect(page.locator("#sideStatus")).toHaveText("1 of 1 calendars loaded");
-  expect(requested).toEqual([link]);
+  await expect(page.locator("#backgroundStatus")).toContainText("ready for other views");
+  expect(requested).toEqual([link, link]);
   await expect(page.locator("#agenda")).toContainText("Database Office");
   await expect(page.locator("#agenda")).not.toContainText("Old Google name");
   await page.locator("#calFilter").click();

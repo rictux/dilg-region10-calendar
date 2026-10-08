@@ -1,9 +1,160 @@
+import { CalendarCache, CALENDAR_CACHE_TTL, validCalendarFeed } from "./calendar-cache.js";
+import { CalendarAnalysisClient } from "./calendar-analysis-client.js";
+
 // Calendar arithmetic uses UTC fields shifted to Manila, independent of the viewer's timezone.
 function manilaNow() {
   return new Date(Date.now() + 8 * 3600000);
 }
 
 const calendarNames = new Map();
+const calendarCache = new CalendarCache();
+const analysisClient = new CalendarAnalysisClient();
+const plainTextCache = new Map();
+let eventFacts = new WeakMap();
+let analysisEvents = null;
+const activityCache = new Map();
+const viewCache = new Map();
+let renderVersion = 0;
+let processing = false;
+let analysisFailed = false;
+let loadedAt = 0;
+let loadedRange = null;
+let dataGeneration = 0;
+let backgroundSequence = 0;
+const pendingFeeds = new Map();
+
+function yearRange(cursor) {
+  const year = cursor.getUTCFullYear();
+  return { from: `${year}-01-01T00:00:00+08:00`, to: `${year + 1}-01-01T00:00:00+08:00` };
+}
+function selectedRange() {
+  const [start, end] = range();
+  const exclusiveEnd = startOfDay(end);
+  exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
+  return { from: localKey(start) + "T00:00:00+08:00", to: localKey(exclusiveEnd) + "T00:00:00+08:00" };
+}
+function loadedRangeCoversSelection() {
+  const selected = selectedRange();
+  return loadedRange && Date.parse(loadedRange.from) <= Date.parse(selected.from) &&
+    Date.parse(loadedRange.to) >= Date.parse(selected.to);
+}
+function cancelFeedRequests() {
+  dataGeneration++;
+  backgroundSequence++;
+  for (const task of pendingFeeds.values()) task.controller.abort();
+  pendingFeeds.clear();
+  $("backgroundStatus").textContent = "";
+}
+function fetchCalendarData(link, period, { force = false } = {}) {
+  const key = calendarCache.key(link, period);
+  const existing = pendingFeeds.get(key);
+  if (existing) return existing.promise;
+  const generation = dataGeneration;
+  const controller = new AbortController();
+  const task = { controller, promise: null };
+  task.promise = (async () => {
+    const cacheable = !new URL(link).pathname.includes("/private-");
+    const cached = !force && cacheable ? await calendarCache.get(link, period) : null;
+    if (generation !== dataGeneration) throw new DOMException("Superseded", "AbortError");
+    if (cached) return cached;
+    if (cacheable) await calendarCache.remove(link, period);
+    if (generation !== dataGeneration) throw new DOMException("Superseded", "AbortError");
+    const timeout = setTimeout(() => controller.abort(new DOMException("Calendar request timed out", "TimeoutError")), 30000);
+    try {
+      const response = await fetch("/api/calendar-feed", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: link, ...period }), signal: controller.signal,
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || "Calendar could not be loaded.");
+      if (!validCalendarFeed(data)) throw Error("Calendar returned invalid activity data.");
+      if (generation !== dataGeneration) throw new DOMException("Superseded", "AbortError");
+      const savedAt = Date.now();
+      if (cacheable) await calendarCache.put(link, period, data, savedAt);
+      return { data, savedAt };
+    } finally { clearTimeout(timeout); }
+  })().finally(() => { if (pendingFeeds.get(key) === task) pendingFeeds.delete(key); });
+  pendingFeeds.set(key, task);
+  return task.promise;
+}
+async function prefetchYear(cursor, links) {
+  const generation = dataGeneration, sequence = ++backgroundSequence;
+  const period = yearRange(cursor), year = cursor.getUTCFullYear();
+  // Let Today's completed results paint before starting background work.
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  if (generation !== dataGeneration || sequence !== backgroundSequence) return;
+  $("backgroundStatus").textContent = `Preparing ${year} calendars…`;
+  let failures = 0;
+  // Leave room for foreground navigation under the server's concurrency limit.
+  for (let i = 0; i < links.length; i += 4) {
+    if (generation !== dataGeneration || sequence !== backgroundSequence) return;
+    const results = await Promise.allSettled(links.slice(i, i + 4).map(link => fetchCalendarData(link, period)));
+    failures += results.filter(result => result.status === "rejected").length;
+  }
+  if (generation !== dataGeneration || sequence !== backgroundSequence) return;
+  $("backgroundStatus").textContent = failures
+    ? `Some ${year} calendars will retry when you open another view.`
+    : `${year} calendars ready for other views.`;
+}
+
+function cachedTask(cache, key, task) {
+  if (cache.has(key)) return cache.get(key);
+  const value = task();
+  cache.set(key, value);
+  if (cache.size > 8) cache.delete(cache.keys().next().value);
+  value.catch(() => { if (cache.get(key) === value) cache.delete(key); });
+  return value;
+}
+function describeEvent(event) {
+  if (eventFacts.has(event)) return eventFacts.get(event);
+  const facts = {
+    calendarId: event.calendarId, summary: event.summary,
+    start: +eventDate(event), end: +eventEnd(event), day: localKey(eventDate(event)), allDay: isAllDay(event),
+    venue: venueOf(event), facilitators: facilitators(event), participants: participants(event), contacts: contactPersons(event),
+    category: category(event), mode: deliveryMode(event), level: eventLevel(event), groups: stakeholderCategories(event),
+  };
+  eventFacts.set(event, facts);
+  return facts;
+}
+async function mapInBatches(items, transform) {
+  const result = [];
+  let start = performance.now();
+  for (const item of items) {
+    result.push(transform(item));
+    if (performance.now() - start > 8) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      start = performance.now();
+    }
+  }
+  return result;
+}
+async function analyzeView(from, to, filters) {
+  if (analysisEvents !== state.events) {
+    analysisEvents = state.events;
+    eventFacts = new WeakMap();
+    activityCache.clear();
+    viewCache.clear();
+  }
+  const events = state.events;
+  const key = JSON.stringify([+from, +to, [...filters.selected].sort()]);
+  const viewKey = JSON.stringify([key, filters.modeFilter, filters.scopeFilter, filters.officeFilter, filters.groupFilter]);
+  return cachedTask(viewCache, viewKey, async () => {
+    const activities = await cachedTask(activityCache, key, async () => {
+      const reports = events.filter(event => filters.selected.has(event.calendarId) &&
+        eventDate(event) <= to && eventEnd(event) > from && event.status !== "cancelled");
+      const facts = await mapInBatches(reports, describeEvent);
+      const groups = await analysisClient.run("duplicates", facts);
+      const merged = await mapInBatches(groups, indices => mergeGroup(indices.map(index => reports[index])));
+      merged.sort((a, b) => eventDate(a) - eventDate(b));
+      await mapInBatches(merged, describeEvent);
+      return merged;
+    });
+    const ev = currentEvents({}, activities, filters);
+    const pairs = await analysisClient.run("overlaps", ev.map(describeEvent));
+    const conflicts = pairs.map(pair => ({ ...pair, a: ev[pair.a], b: ev[pair.b], start: new Date(pair.start), end: new Date(pair.end) }));
+    return { activities, ev, conflicts };
+  });
+}
 function safeRead(key) {
   try {
     return localStorage.getItem(key);
@@ -24,8 +175,7 @@ let activeLinks = [];
 let calendarListLoaded = false;
 let sourceResults = [],
   loading = false,
-  requestVersion = 0,
-  loadedPeriod = "";
+  requestVersion = 0;
 const COLORS = [
   "#2563EB",
   "#EA580C",
@@ -100,6 +250,7 @@ const isAllDay = (e) => !e.start.dateTime;
 const duration = (e) =>
   isAllDay(e) ? 0 : Math.max(0, (eventEnd(e) - eventDate(e)) / 36e5);
 const category = (e) => {
+  if (eventFacts.has(e)) return eventFacts.get(e).category;
   const detail = cleanDescription(e.description)
       .replace(/\btraining managers?[’']? checklist\b/gi, "")
       .replace(/\blgrc activity tracker\b/gi, ""),
@@ -143,10 +294,19 @@ const category = (e) => {
   return "Other";
 };
 const plainText = (html) => {
-  const d = new DOMParser().parseFromString(html || "", "text/html");
-  return (d.body.textContent || "").replace(/\s+/g, " ").trim();
+  const source = String(html || "");
+  if (plainTextCache.has(source)) return plainTextCache.get(source);
+  const d = new DOMParser().parseFromString(source, "text/html");
+  const text = (d.body.textContent || "").replace(/\s+/g, " ").trim();
+  // Bound both entry count and individual strings retained between renders.
+  if (source.length <= 16000) {
+    plainTextCache.set(source, text);
+    if (plainTextCache.size > 1000) plainTextCache.delete(plainTextCache.keys().next().value);
+  }
+  return text;
 };
 function stakeholderCategories(e) {
+  if (eventFacts.has(e)) return eventFacts.get(e).groups;
   if (e.sourceEvents)
     return [...new Set(e.sourceEvents.flatMap(stakeholderCategories))];
   const attendeeText = (e.attendees || [])
@@ -495,6 +655,7 @@ function platformFromLink(value) {
   }
 }
 function venueOf(e) {
+  if (eventFacts.has(e)) return eventFacts.get(e).venue;
   const direct = cleanVenue(e.location);
   if (direct !== "Not specified") return direct;
   const text = cleanDescription(e.description),
@@ -507,6 +668,7 @@ function venueOf(e) {
   return meetingCredentials(e) ? "Online meeting" : "Not specified";
 }
 function deliveryMode(e) {
+  if (eventFacts.has(e)) return eventFacts.get(e).mode;
   const text = (
       " " +
       [e.summary, e.description, e.location].filter(Boolean).join(" ") +
@@ -538,6 +700,7 @@ function deliveryMode(e) {
   return "Unspecified";
 }
 function eventLevel(e) {
+  if (eventFacts.has(e)) return eventFacts.get(e).level;
   const title = (" " + (e.summary || "") + " ").toLowerCase(),
     detail = (
       " " +
@@ -557,39 +720,6 @@ function eventLevel(e) {
   if (field.test(origin)) return "Field Office";
   return "Unspecified";
 }
-const normWords = (value) =>
-  new Set(
-    String(value || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .split(/\s+/)
-      .filter(
-        (w) =>
-          w.length > 2 &&
-          ![
-            "the",
-            "and",
-            "for",
-            "with",
-            "from",
-            "this",
-            "that",
-            "activity",
-            "event",
-            "calendar",
-            "schedule",
-          ].includes(w),
-      ),
-  );
-function setSimilarity(a, b) {
-  if (!a.size || !b.size) return 0;
-  let common = 0;
-  a.forEach((x) => {
-    if (b.has(x)) common++;
-  });
-  return common / (a.size + b.size - common);
-}
-const textSimilarity = (a, b) => setSimilarity(normWords(a), normWords(b));
 const normalizedName = (value) =>
   String(value || "")
     .toLowerCase()
@@ -615,6 +745,7 @@ function labeledNames(e, labels) {
   return out;
 }
 function facilitators(e) {
+  if (eventFacts.has(e)) return eventFacts.get(e).facilitators;
   if (e.facilitatorNames) return e.facilitatorNames;
   return [
     ...new Set(
@@ -631,6 +762,7 @@ function facilitators(e) {
   ];
 }
 function participants(e) {
+  if (eventFacts.has(e)) return eventFacts.get(e).participants;
   if (e.sourceEvents) return [...new Set(e.sourceEvents.flatMap(participants))];
   return [
     ...new Set(
@@ -647,6 +779,7 @@ function participants(e) {
   ];
 }
 function contactPersons(e) {
+  if (eventFacts.has(e)) return eventFacts.get(e).contacts;
   if (e.sourceEvents)
     return [...new Set(e.sourceEvents.flatMap(contactPersons))];
   return [
@@ -690,16 +823,6 @@ function staffInvolved(e) {
 }
 const humanName = (value) =>
   String(value || "").replace(/\b\w/g, (c) => c.toUpperCase());
-function nameOverlap(a, b) {
-  const A = new Set(a),
-    B = new Set(b);
-  if (!A.size || !B.size) return 0;
-  let n = 0;
-  A.forEach((x) => {
-    if (B.has(x)) n++;
-  });
-  return n / Math.min(A.size, B.size);
-}
 function officeName(value) {
   let name = String(value || "Unknown office").trim();
   if (/^[^@\s]+@[^@\s]+$/.test(name))
@@ -735,36 +858,6 @@ function officeRowBackground(colors) {
       `${hexRgba(color, 0.13)} ${((index + 1) * size).toFixed(2)}%`,
     ]);
   return `linear-gradient(90deg,${stops.join(",")})`;
-}
-function duplicateScore(a, b) {
-  if (
-    a.calendarId === b.calendarId ||
-    localKey(eventDate(a)) !== localKey(eventDate(b))
-  )
-    return 0;
-  const title = textSimilarity(a.summary, b.summary),
-    startGap = Math.abs(eventDate(a) - eventDate(b)) / 6e4,
-    time =
-      startGap <= 15
-        ? 1
-        : startGap <= 60
-          ? 0.65
-          : eventDate(a) < eventEnd(b) && eventDate(b) < eventEnd(a)
-            ? 0.4
-            : 0,
-    venue = textSimilarity(venueOf(a), venueOf(b)),
-    fac = nameOverlap(facilitators(a), facilitators(b)),
-    part = nameOverlap(participants(a), participants(b)),
-    contact = nameOverlap(contactPersons(a), contactPersons(b));
-  if (title < 0.35 || !time) return 0;
-  return (
-    title * 0.44 +
-    time * 0.18 +
-    venue * 0.1 +
-    fac * 0.1 +
-    part * 0.1 +
-    contact * 0.08
-  );
 }
 function mergeGroup(group) {
   const best = [...group].sort(
@@ -818,37 +911,6 @@ function mergeGroup(group) {
     sourceCount: group.length,
     mergedCount: group.length - 1,
   };
-}
-function mergeDuplicateActivities(events) {
-  const n = events.length,
-    parent = Array.from({ length: n }, (_, i) => i),
-    find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x]))),
-    join = (a, b) => {
-      a = find(a);
-      b = find(b);
-      if (a !== b) parent[b] = a;
-    },
-    sorted = events
-      .map((e, i) => ({ e, i }))
-      .sort((a, b) => eventDate(a.e) - eventDate(b.e));
-  for (let x = 0; x < sorted.length; x++)
-    for (let y = x + 1; y < sorted.length; y++) {
-      if (localKey(eventDate(sorted[x].e)) !== localKey(eventDate(sorted[y].e)))
-        break;
-      const score = duplicateScore(sorted[x].e, sorted[y].e),
-        title = textSimilarity(sorted[x].e.summary, sorted[y].e.summary);
-      if (score >= 0.64 || (score >= 0.55 && title >= 0.78))
-        join(sorted[x].i, sorted[y].i);
-    }
-  const groups = new Map();
-  events.forEach((e, i) => {
-    const r = find(i);
-    if (!groups.has(r)) groups.set(r, []);
-    groups.get(r).push(e);
-  });
-  return [...groups.values()]
-    .map(mergeGroup)
-    .sort((a, b) => eventDate(a) - eventDate(b));
 }
 function activitySummary(e) {
   const mode = deliveryMode(e),
@@ -904,40 +966,6 @@ function activitySummary(e) {
     );
   return parts.join(" ");
 }
-function findConflicts(ev) {
-  const timed = ev.filter((e) => !isAllDay(e)),
-    pairs = [];
-  for (let i = 0; i < timed.length; i++)
-    for (let j = i + 1; j < timed.length; j++) {
-      const a = timed[i],
-        b = timed[j];
-      if (eventDate(a) < eventEnd(b) && eventDate(b) < eventEnd(a)) {
-        const sharedFac = facilitators(a).filter((x) =>
-            facilitators(b).includes(x),
-          ),
-          sharedPart = participants(a).filter((x) =>
-            participants(b).includes(x),
-          ),
-          start = new Date(Math.max(eventDate(a), eventDate(b))),
-          end = new Date(Math.min(eventEnd(a), eventEnd(b)));
-        pairs.push({
-          a,
-          b,
-          start,
-          end,
-          sharedFac,
-          sharedPart,
-          basis: sharedFac.length
-            ? "Shared facilitator"
-            : sharedPart.length
-              ? "Shared participant"
-              : "Time overlap",
-        });
-      }
-    }
-  return pairs;
-}
-
 function startOfWeek(d) {
   const start = startOfDay(d);
   start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
@@ -974,32 +1002,19 @@ function range() {
     );
   return [a, b];
 }
-function periodActivities() {
-  const [a, b] = range();
-  // Filter source calendars first so excluded offices cannot affect merged totals.
-  const reports = state.events.filter(
-    (e) =>
-      state.selected.has(e.calendarId) &&
-      eventDate(e) <= b &&
-      eventEnd(e) > a &&
-      e.status !== "cancelled",
-  );
-  return mergeDuplicateActivities(reports);
-}
-function currentEvents({ ignoreGroup = false, ignoreOffice = false } = {}, activities = periodActivities()) {
+function currentEvents({ ignoreGroup = false, ignoreOffice = false } = {}, activities, filters = state) {
   return activities.filter(
     (e) =>
-      (state.modeFilter === "all" || deliveryMode(e) === state.modeFilter) &&
-      (state.scopeFilter === "all" || eventLevel(e) === state.scopeFilter) &&
-      (ignoreOffice ||
-        !state.officeFilter ||
-        e.offices.includes(state.officeFilter)) &&
-      (ignoreGroup ||
-        state.groupFilter === "all" ||
-        stakeholderCategories(e).includes(state.groupFilter)),
+      (filters.modeFilter === "all" || deliveryMode(e) === filters.modeFilter) &&
+      (filters.scopeFilter === "all" || eventLevel(e) === filters.scopeFilter) &&
+      (ignoreOffice || !filters.officeFilter || e.offices.includes(filters.officeFilter)) &&
+      (ignoreGroup || filters.groupFilter === "all" || stakeholderCategories(e).includes(filters.groupFilter)),
   );
 }
-function render() {
+async function render() {
+  const version = ++renderVersion;
+  processing = false;
+  analysisFailed = false;
   const [a, b] = range();
   $("pageTitle").textContent =
     state.view === "day"
@@ -1042,10 +1057,22 @@ function render() {
     renderAvailability();
     return;
   }
-  const activities = periodActivities(),
-    ev = currentEvents({}, activities),
-    unique = new Set(ev.flatMap((e) => e.offices)).size,
-    conflicts = findConflicts(ev);
+  let result = { activities: [], ev: [], conflicts: [] };
+  if (state.connected) {
+    processing = true;
+    renderAvailability();
+    try {
+      result = await analyzeView(a, b, { ...state, selected: new Set(state.selected) });
+    } catch {
+      if (version !== renderVersion) return;
+      analysisFailed = true;
+      toast("Calendar analysis failed. Refresh calendars to retry.");
+    }
+    if (version !== renderVersion) return;
+  }
+  processing = false;
+  const { activities, ev, conflicts } = result;
+  const unique = new Set(ev.flatMap((e) => e.offices)).size;
   $("metricEvents").textContent = ev.length;
   $("metricMerged").textContent = ev.filter((e) => e.mergedCount > 0).length;
   $("metricOffices").textContent = unique;
@@ -1245,10 +1272,10 @@ function renderOfficeTiles(ev) {
     '<div class="empty"><strong>No office activity found</strong>The originating calendar determines the office or division.</div>';
   document.querySelectorAll("[data-office]").forEach(
     (b) =>
-      (b.onclick = () => {
+      (b.onclick = async () => {
         const office = b.dataset.office;
         state.officeFilter = state.officeFilter === office ? null : office;
-        render();
+        await render();
         [...$("officeTiles").querySelectorAll("[data-office]")]
           .find((item) => item.dataset.office === office)
           ?.focus();
@@ -1282,12 +1309,12 @@ function renderStakeholders(ev) {
       ? "Select a group to filter activities. Activities may belong to several groups."
       : `Filtering by ${state.groupFilter}. Select it again or All groups to clear.`;
 }
-$("stakeholders").addEventListener("click", (event) => {
+$("stakeholders").addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-group]");
   if (!button) return;
   const group = button.dataset.group;
   state.groupFilter = state.groupFilter === group ? "all" : group;
-  render();
+  await render();
   // Rendering replaces the cards; keep focus on the activated control.
   [...$("stakeholders").querySelectorAll("[data-group]")]
     .find((item) => item.dataset.group === group)
@@ -1664,7 +1691,8 @@ async function loadGoogleData() {
       .filter((c) => !previousIds.has(c.id) || previous.has(c.id))
       .map((c) => c.id),
   );
-  loadedPeriod = periodKey();
+  loadedRange = { from, to };
+  loadedAt = Date.now();
   const seen = new Set();
   state.events = batches.flat().filter((e) => {
     const key =
@@ -1782,11 +1810,11 @@ $("linksForm").onsubmit = async (e) => {
 
 function requestRange() {
   const [start, end] = range();
-  // Fetch the complete boundary week without exceeding the API's 366-day limit.
-  if (
+  // Today loads only one day; boundary weeks keep their complete seven-day range.
+  if (state.view === "day" || (
     state.view === "week" &&
     start.getUTCFullYear() !== end.getUTCFullYear()
-  ) {
+  )) {
     const exclusiveEnd = startOfDay(end);
     exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
     return {
@@ -1794,25 +1822,20 @@ function requestRange() {
       to: localKey(exclusiveEnd) + "T00:00:00+08:00",
     };
   }
-  const year = state.cursor.getUTCFullYear();
-  return {
-    from: localKey(new Date(Date.UTC(year, 0, 1))) + "T00:00:00+08:00",
-    to: localKey(new Date(Date.UTC(year + 1, 0, 1))) + "T00:00:00+08:00",
-  };
-}
-function periodKey() {
-  const { from, to } = requestRange();
-  return `${from}/${to}`;
+  return yearRange(state.cursor);
 }
 function sourceName(link, index) {
   return calendarNames.get(link) || `Calendar ${index + 1}`;
 }
-async function loadCalendarConfiguration() {
+async function loadCalendarConfiguration({ force = false } = {}) {
+  cancelFeedRequests();
+  requestVersion++;
   loading = true;
   state.connected = false;
   render();
   $("sideStatus").textContent = "Loading calendar list...";
   try {
+    if (force) await calendarCache.clear();
     const response = await fetch("/api/calendar-links", {
       cache: "no-store",
       signal: AbortSignal.timeout(15000),
@@ -1828,7 +1851,7 @@ async function loadCalendarConfiguration() {
     for (const row of data.calendars) calendarNames.set(row.link, row.name);
     activeLinks = data.calendars.map((row) => row.link);
     calendarListLoaded = true;
-    await loadLinkedCalendars(activeLinks, { save: false, quiet: true });
+    await loadLinkedCalendars(activeLinks, { save: false, quiet: true, force });
   } catch (error) {
     loading = false;
     calendarListLoaded = false;
@@ -1879,15 +1902,17 @@ function renderSkeletons() {
   ).join("");
 }
 function renderAvailability() {
-  $("dashboard").setAttribute("aria-busy", String(loading));
-  const status = loading ? "Loading calendar activities…" : "";
+  const busy = loading || processing;
+  $("dashboard").setAttribute("aria-busy", String(busy));
+  const status = loading ? "Loading calendar activities…" : processing ? "Preparing calendar activities…" : "";
   if ($("loadingStatus").textContent !== status) $("loadingStatus").textContent = status;
   $("addLinkBtn").disabled = loading;
-  const unavailable = loading || !state.connected;
-  $("prevBtn").disabled = loading;
-  $("nextBtn").disabled = loading;
-  $("todayBtn").disabled = loading;
-  if (loading) {
+  $("refreshBtn").disabled = loading;
+  const unavailable = loading || !state.connected || analysisFailed;
+  $("prevBtn").disabled = busy;
+  $("nextBtn").disabled = busy;
+  $("todayBtn").disabled = busy;
+  if (busy) {
     renderSkeletons();
     return;
   }
@@ -1916,9 +1941,14 @@ function renderAvailability() {
       "Conflict checks will appear after activities load.";
     $("conflictCount").textContent = "Not available";
     $("agendaCount").textContent = "Not available";
+    if (analysisFailed) {
+      $("summaryLead").textContent = "Calendar activities could not be processed.";
+      $("insights").textContent = "Refresh calendars to retry.";
+      $("agenda").innerHTML = '<div class="empty"><strong>Unable to process activities</strong>Refresh calendars to retry.</div>';
+    }
   }
 }
-async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
+async function loadLinkedCalendars(links, { save = true, quiet = false, force = false } = {}) {
   if (links.length > 15) {
     $("linksError").textContent = "Add at most 15 calendars.";
     $("linksError").style.display = "block";
@@ -1943,6 +1973,8 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
   }
   const version = ++requestVersion,
     range = requestRange(),
+    cursor = new Date(state.cursor),
+    dayView = state.view === "day",
     oldSelected = new Set(state.selected),
     oldIds = new Set(state.calendars.map((c) => c.id));
   activeLinks = [...links];
@@ -1959,15 +1991,9 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
   render();
   const results = await Promise.allSettled(
     links.map(async (link, i) => {
-      const response = await fetch("/api/calendar-feed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: link, ...range }),
-        signal: AbortSignal.timeout(30000),
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw Error(data.error || "Calendar could not be loaded.");
+      const response = await fetchCalendarData(link, range, { force });
+      // A foreground request may share the background fetch; decorate its own copy.
+      const data = structuredClone(response.data), savedAt = response.savedAt;
       const color = COLORS[i % COLORS.length];
       data.calendar.backgroundColor = color;
       const name = calendarNames.get(link);
@@ -1976,7 +2002,7 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
         data.events.forEach((e) => (e.calendarName = name));
       }
       data.events.forEach((e) => (e.color = color));
-      return data;
+      return { ...data, savedAt };
     }),
   );
   if (version !== requestVersion) return false;
@@ -2018,10 +2044,14 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
       .map((c) => c.id),
   );
   state.connected = good.length > 0;
-  loadedPeriod = periodKey();
+  loadedRange = range;
+  loadedAt = good.length ? Math.min(...good.map(result => result.savedAt)) : 0;
   loading = false;
   if (save) safeWrite("calendar_digest_links", JSON.stringify(links));
   const errors = sourceResults.filter((r) => r.error);
+  const annual = yearRange(cursor);
+  if (!dayView && range.from === annual.from && range.to === annual.to && !errors.length)
+    $("backgroundStatus").textContent = `${cursor.getUTCFullYear()} calendars ready for other views.`;
   $("sideStatus").textContent =
     `${good.length} of ${links.length} calendars loaded`;
   $("sideDot").classList.toggle("live", good.length > 0);
@@ -2031,7 +2061,8 @@ async function loadLinkedCalendars(links, { save = true, quiet = false } = {}) {
   $("linksError").style.display = errors.length ? "block" : "none";
   setLinkLoading(false);
   renderCalendarMenu();
-  render();
+  await render();
+  if (dayView && good.length && version === requestVersion) void prefetchYear(cursor, [...links]);
   if (!quiet) toast(`${good.length} of ${links.length} calendars loaded.`);
   return errors.length === 0;
 }
@@ -2041,18 +2072,8 @@ async function refreshPeriod(force = false) {
     await loadCalendarConfiguration();
     return;
   }
-  if (!force && loadedPeriod === periodKey()) {
-    if (state.view === "year") {
-      loading = true;
-      try {
-        render();
-        // Two frames allow the active menu and skeletons to paint before analysis.
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      } finally {
-        loading = false;
-      }
-    }
-    render();
+  if (!force && loadedRangeCoversSelection() && Date.now() - loadedAt < CALENDAR_CACHE_TTL) {
+    await render();
     return;
   }
   if (state.source === "oauth") {
@@ -2061,7 +2082,6 @@ async function refreshPeriod(force = false) {
     render();
     try {
       await loadGoogleData();
-      loadedPeriod = periodKey();
       state.connected = true;
     } catch (error) {
       state.connected = false;
@@ -2070,8 +2090,13 @@ async function refreshPeriod(force = false) {
       loading = false;
       render();
     }
-  } else await loadLinkedCalendars(activeLinks, { save: false, quiet: true });
+  } else await loadLinkedCalendars(activeLinks, { save: false, quiet: true, force });
 }
+$("refreshBtn").onclick = () => {
+  if (loading) return;
+  if (state.source === "oauth") refreshPeriod(true);
+  else loadCalendarConfiguration({ force: true });
+};
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !$("calendarMenu").hidden) {
     setCalendarMenuOpen(false);

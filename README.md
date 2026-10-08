@@ -44,15 +44,25 @@ per process. Duplicate calendar IDs and private links are rejected.
 
 The seed migration contains the ten original calendars: LGMED, RICTU, Planning, Quality Management, Personnel, PDMU, LGCDD, Legal, BAC -DILG, and ORD. The frontend loads names and links from `system_calendar.calendar_links` on each page load. Stored names override Google feed titles. Edit the database records to change the configured calendars. The current dashboard supports up to 15 calendars, sorted by name; duplicate Google calendar IDs are rejected.
 
-- The full current year loads once when the page opens or refreshes. Today, Week, Month, and Year reuse that data without importing again. Weeks run Monday through Sunday in Asia/Manila. A week crossing New Year loads its complete seven-day range; leaving that boundary week reloads the selected year's data. Navigating to a different year automatically loads its full year. Requests use Asia/Manila boundaries and are limited to 366 days, including leap years.
+- The default Today view first loads only its Manila calendar day. After Today's results render, public calendars for the full year are fetched in the background and cached for Week, Month, and Year. Opening those views while preparation is running reuses the same requests. Weeks run Monday through Sunday in Asia/Manila. A week crossing New Year loads its complete seven-day range; leaving that boundary week returns to the selected year's data. Navigating to a different year loads its full year. Requests use Asia/Manila boundaries and are limited to 366 days, including leap years.
 - Recurring events, exceptions, moved instances, cancellations, and all-day dates are handled by node-ical.
 - Displayed dates and times use Asia/Manila, even on devices in other timezones.
 - Calendar links and names come from Supabase. Old browser-saved links no longer override them. Empty or unavailable storage shows an explicit message; the app does not fall back to hardcoded calendars. Event data is fetched from Google and is not stored in Supabase.
-- Reloading the page retrieves updates. Partial failures stay visible; unavailable feeds are excluded from statistics and identified in exports.
+- **Refresh** bypasses browser caching and retrieves the latest calendar list and feeds. Reloading the page may reuse feeds cached within the last five minutes. Partial failures stay visible; unavailable feeds are excluded from statistics.
 - Categories, delivery formats, stakeholders, and event levels are keyword-based estimates. Conflicts indicate overlapping timed entries, not confirmed attendee conflicts. Remaining capacity subtracts scheduled hours from eight hours; it does not calculate free time slots.
 - Possible duplicates across selected office calendars are consolidated using title, time, venue, facilitators, participants, and focal persons. Matches are estimates and are marked in the activity details; original calendar entries are unchanged.
 
 ## Updated dashboard features
+
+### Browser caching and background analysis
+
+- Public feed responses are cached in IndexedDB (`calendar-dashboard-cache`, `feeds`) for five minutes, keyed by calendar URL and requested date range. Each browser keeps its own cache; no Redis or additional service is needed. The cache is bounded to 30 entries and 20 MB of serialized feed data. Failed or malformed responses are not cached, and expired records are not used as a fallback.
+- The calendar list and office names are always retrieved from the server on page load and explicit Refresh. Current names override cached Google titles, and removed calendars are not loaded from the cache. OAuth and secret iCal responses are not persisted.
+- Annual preparation starts only after Today is rendered, with at most four background feed requests at a time. It populates the feed cache without changing the visible events, filters, menu, or loading state. A sidebar status reports preparation or retry availability. Background failures do not remove Today's data; opening another view retries missing feeds. Refresh cancels older requests and clears both daily and annual cached feeds before retrieving fresh data.
+- Expired in-memory data is refreshed on the next period navigation. There is no background polling; use Refresh when immediate updates are needed. Browser storage can be cleared through the site's browser settings. If storage is blocked or full, fetching still works normally.
+- `/calendar-worker.js` performs duplicate matching and overlap detection in a browser Web Worker. Matching rules remain unchanged. Overlap detection sorts events and stops comparing when later activities cannot overlap. DOM-dependent HTML extraction remains on the main thread, processed in short batches; DOM rendering also stays on that thread.
+- Up to eight recent period/selection analyses and eight filtered view results are reused in memory. New feed data invalidates them. Late worker results cannot replace a newer selected view. If workers cannot start or fail, the shared analysis functions run in the browser's main thread as a compatibility fallback.
+- Loading skeletons cover foreground downloads and analysis. Reopening a processed view can finish immediately without a visible loading animation. Daily requests reduce recurrence expansion, response size, and browser processing before Today appears. The server still downloads the full Google ICS feed for each uncached range, so daily-first loading does not eliminate Google's download latency and can download a feed again during annual preparation. Browser caches are not shared between users.
 
 Integrated from `calendar-activity-digest-source.zip`, retaining this project's Express/Vercel backend, recurrence expansion, default calendars, and Asia/Manila date handling.
 
@@ -84,6 +94,8 @@ Google secret iCal links are also accepted. These links are credentials: if ente
 ## Files and deployment
 
 - public/index.html, public/styles.css, public/app.js: adapted interface and client behavior.
+- public/calendar-cache.js: bounded browser feed cache with expiry and storage fallback.
+- public/calendar-analysis.js, public/calendar-analysis-client.js, public/calendar-worker.js: shared matching algorithms and browser worker lifecycle.
 - server.js: Express server and bounded feed endpoint.
 - calendar.js: Google URL validation and recurrence expansion.
 - test/: backend validation and calendar fixtures.

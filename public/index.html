@@ -104,6 +104,7 @@
               ><span id="sideDot" class="status-dot"></span
               ><span id="sideStatus">Loading calendars…</span></strong
             >DILG Region 10 · Asia/Manila<br />Read-only calendar dashboard.
+            <div id="backgroundStatus" role="status"></div>
           </div>
         </div>
       </aside>
@@ -142,6 +143,7 @@
             </button>
           </div>
           <div class="filters">
+            <button class="select-like" id="refreshBtn" type="button" title="Fetch the latest calendar activities" aria-label="Refresh calendars">Refresh</button>
             <button class="select-like" id="todayBtn">Today</button
             ><select
               class="select-like"
@@ -463,6 +465,6 @@ https://calendar.google.com/calendar/ical/…/basic.ics"
     </dialog>
     <div class="toast" id="toast" role="status"></div>
 
-    <script src="/app.js" defer></script>
+    <script src="/app.js" type="module"></script>
   </body>
 </html>

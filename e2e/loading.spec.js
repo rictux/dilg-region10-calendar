@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures.js";
 
-test("cached Year navigation paints the selection and skeletons before annual results", async ({ page }) => {
+test("Year navigation highlights immediately with loading or cached annual results", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-09-22T04:00:00Z") });
   let requests = 0;
   await page.route("**/api/calendar-feed", route => {
@@ -15,6 +15,7 @@ test("cached Year navigation paints the selection and skeletons before annual re
   });
   await page.goto("/");
   await expect(page.locator("#metricEvents")).toHaveText("1");
+  await expect(page.locator("#backgroundStatus")).toContainText("ready for other views");
   const initialRequests = requests;
   for (const from of ["Today", "Week", "Month"]) {
     await page.getByRole("button", { name: from, exact: true }).first().click();
@@ -32,9 +33,9 @@ test("cached Year navigation paints the selection and skeletons before annual re
       });
     });
     await page.getByRole("button", { name: "Year", exact: true }).click();
-    expect(await page.evaluate(() => window.yearLoadingFrame)).toEqual({
-      selected: true, busy: "true", skeleton: true, title: "Annual activity summary",
-    });
+    const frame = await page.evaluate(() => window.yearLoadingFrame);
+    expect(frame).toMatchObject({ selected: true, title: "Annual activity summary" });
+    expect(frame.skeleton).toBe(frame.busy === "true");
     await expect(page.locator("#metricEvents")).toHaveText("2");
     await expect(page.locator("#dashboard")).toHaveAttribute("aria-busy", "false");
     await expect(page.locator(".skeleton")).toHaveCount(0);
