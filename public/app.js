@@ -1,5 +1,6 @@
 import { CalendarCache, CALENDAR_CACHE_TTL, validCalendarFeed } from "./calendar-cache.js";
 import { CalendarAnalysisClient } from "./calendar-analysis-client.js";
+import { createCalendarView } from "./calendar-view.js";
 
 // Calendar arithmetic uses UTC fields shifted to Manila, independent of the viewer's timezone.
 function manilaNow() {
@@ -80,7 +81,7 @@ function fetchCalendarData(link, period, { force = false } = {}) {
 async function prefetchYear(cursor, links) {
   const generation = dataGeneration, sequence = ++backgroundSequence;
   const period = yearRange(cursor), year = cursor.getUTCFullYear();
-  // Let Today's completed results paint before starting background work.
+  // Let the foreground view paint before starting background work.
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   if (generation !== dataGeneration || sequence !== backgroundSequence) return;
   $("backgroundStatus").textContent = `Preparing ${year} calendars…`;
@@ -191,7 +192,7 @@ const COLORS = [
   "#7C2D12",
 ];
 const state = {
-  view: "day",
+  view: "dashboard",
   cursor: manilaNow(),
   calendars: [],
   events: [],
@@ -1016,8 +1017,12 @@ async function render() {
   processing = false;
   analysisFailed = false;
   const [a, b] = range();
+  $("dashboardView").hidden = state.view === "calendar";
+  $("calendarView").hidden = state.view !== "calendar";
   $("pageTitle").textContent =
-    state.view === "day"
+    state.view === "dashboard" ? "Activity dashboard"
+    : state.view === "calendar" ? "Activity calendar"
+    : state.view === "day"
       ? "Today’s activity"
       : state.view === "week"
         ? "Weekly activity"
@@ -1049,9 +1054,9 @@ async function render() {
               : { month: "long", year: "numeric" },
           );
   $("summaryMode").textContent =
-    { day: "Daily summary", week: "Weekly summary", month: "Monthly summary", year: "Annual summary" }[state.view];
+    { dashboard: "Dashboard overview", calendar: "Monthly summary", day: "Daily summary", week: "Weekly summary", month: "Monthly summary", year: "Annual summary" }[state.view];
   $("agendaTitle").textContent =
-    { day: "Daily activities", week: "All weekly activities", month: "All monthly activities", year: "All annual activities" }[state.view];
+    { dashboard: "Current month activities", calendar: "All monthly activities", day: "Daily activities", week: "All weekly activities", month: "All monthly activities", year: "All annual activities" }[state.view];
   // Loading must never run the expensive annual analysis before showing placeholders.
   if (loading) {
     renderAvailability();
@@ -1072,6 +1077,12 @@ async function render() {
   }
   processing = false;
   const { activities, ev, conflicts } = result;
+  if (state.view === "calendar") {
+    calendarView.render(ev, state.cursor, conflicts);
+    renderAvailability();
+    return;
+  }
+  $("calendarGrid").replaceChildren();
   const unique = new Set(ev.flatMap((e) => e.offices)).size;
   $("metricEvents").textContent = ev.length;
   $("metricMerged").textContent = ev.filter((e) => e.mergedCount > 0).length;
@@ -1134,7 +1145,7 @@ function renderSummary(ev, concurrent, duplicates) {
         ? "today"
         : state.view === "week"
           ? "this week"
-          : state.view === "month"
+          : ["dashboard", "calendar", "month"].includes(state.view)
             ? "this month"
             : "this year";
   $("summaryLead").textContent =
@@ -1173,7 +1184,7 @@ function renderSummary(ev, concurrent, duplicates) {
       bits.push(
         `<b>${esc(peak[0])}</b> has the highest activity count at ${peak[1]}.`,
       );
-  } else if (state.view === "month" || state.view === "week") {
+  } else if (["dashboard", "calendar", "month", "week"].includes(state.view)) {
     const best = Object.entries(byDay(ev)).sort((a, b) => b[1] - a[1])[0];
     if (best)
       bits.push(
@@ -1724,6 +1735,7 @@ function toast(msg) {
 }
 function movePeriod(n) {
   if (loading) return;
+  calendarView.close();
   if (state.view === "day")
     state.cursor.setUTCDate(state.cursor.getUTCDate() + n);
   else if (state.view === "week")
@@ -1744,10 +1756,15 @@ document.querySelectorAll("[data-view]").forEach(
   (b) =>
     (b.onclick = () => {
       if (loading) return;
+      calendarView.close();
       state.view = b.dataset.view;
       document
         .querySelectorAll("[data-view]")
-        .forEach((x) => x.classList.toggle("active", x === b));
+        .forEach((x) => {
+          x.classList.toggle("active", x === b);
+          if (x === b) x.setAttribute("aria-current", "page");
+          else x.removeAttribute("aria-current");
+        });
       refreshPeriod();
     }),
 );
@@ -1810,8 +1827,9 @@ $("linksForm").onsubmit = async (e) => {
 
 function requestRange() {
   const [start, end] = range();
-  // Today loads only one day; boundary weeks keep their complete seven-day range.
-  if (state.view === "day" || (
+  // Dashboard needs only this month; the annual feed is prepared after it paints.
+  // Boundary weeks keep their complete seven-day range.
+  if (state.view === "dashboard" || state.view === "day" || (
     state.view === "week" &&
     start.getUTCFullYear() !== end.getUTCFullYear()
   )) {
@@ -1913,10 +1931,19 @@ function renderAvailability() {
   $("nextBtn").disabled = busy;
   $("todayBtn").disabled = busy;
   if (busy) {
+    if (state.view === "calendar") {
+      $("calendarMonthCount").textContent = "Loading activities…";
+      $("calendarGrid").innerHTML = Array.from({ length: 35 }, () =>
+        `<div class="calendar-day" aria-hidden="true">${skeletonLines(3)}</div>`).join("");
+    }
     renderSkeletons();
     return;
   }
   if (unavailable) {
+    if (state.view === "calendar") {
+      $("calendarMonthCount").textContent = "Not available";
+      $("calendarGrid").innerHTML = '<div class="empty calendar-unavailable"><strong>Calendar data unavailable</strong>Refresh calendars to retry.</div>';
+    }
     for (const id of [
       "metricEvents",
       "metricMerged",
@@ -1974,7 +2001,7 @@ async function loadLinkedCalendars(links, { save = true, quiet = false, force = 
   const version = ++requestVersion,
     range = requestRange(),
     cursor = new Date(state.cursor),
-    dayView = state.view === "day",
+    priorityView = state.view === "day" || state.view === "dashboard",
     oldSelected = new Set(state.selected),
     oldIds = new Set(state.calendars.map((c) => c.id));
   activeLinks = [...links];
@@ -2050,7 +2077,7 @@ async function loadLinkedCalendars(links, { save = true, quiet = false, force = 
   if (save) safeWrite("calendar_digest_links", JSON.stringify(links));
   const errors = sourceResults.filter((r) => r.error);
   const annual = yearRange(cursor);
-  if (!dayView && range.from === annual.from && range.to === annual.to && !errors.length)
+  if (!priorityView && range.from === annual.from && range.to === annual.to && !errors.length)
     $("backgroundStatus").textContent = `${cursor.getUTCFullYear()} calendars ready for other views.`;
   $("sideStatus").textContent =
     `${good.length} of ${links.length} calendars loaded`;
@@ -2062,7 +2089,7 @@ async function loadLinkedCalendars(links, { save = true, quiet = false, force = 
   setLinkLoading(false);
   renderCalendarMenu();
   await render();
-  if (dayView && good.length && version === requestVersion) void prefetchYear(cursor, [...links]);
+  if (priorityView && good.length && version === requestVersion) void prefetchYear(cursor, [...links]);
   if (!quiet) toast(`${good.length} of ${links.length} calendars loaded.`);
   return errors.length === 0;
 }
@@ -2213,4 +2240,6 @@ $("addLinkForm").addEventListener("submit", async (event) => {
 $("addLinkDialog").addEventListener("cancel", event => {
   if ($("saveAddLink").disabled) event.preventDefault();
 });
+const calendarView = createCalendarView({ $, esc, fmtDate, localKey, startOfDay,
+  eventDate, lastDay, eventRow, eventOfficeColors, deliveryMode, eventLevel, category, manilaNow });
 loadCalendarConfiguration();
