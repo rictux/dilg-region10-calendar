@@ -27,7 +27,7 @@ test("annual view loads the whole Manila year and navigates between years", asyn
   expect(requests.slice(-10).map(r => r.url)).toEqual(initialLinks);
   expect(requests.at(-1)).toMatchObject({ from: "2026-01-01T00:00:00+08:00", to: "2027-01-01T00:00:00+08:00" });
   await expect(page.locator("#agenda")).toContainText("LGU meeting 12-15");
-  // All views reuse the ten annual feeds prepared after the ten Today feeds.
+  // All views reuse the ten annual feeds prepared after the ten Dashboard feeds.
   for (const view of ["Month", "Today", "Year", "Today", "Month", "Year"]) {
     await page.getByRole("button", { name: view, exact: true }).first().click();
     await expect(page.locator("#nextBtn")).toBeEnabled();

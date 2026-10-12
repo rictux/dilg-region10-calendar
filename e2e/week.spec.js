@@ -31,7 +31,7 @@ test("weekly view includes the full Manila week across New Year", async ({
     });
   });
   await page.goto("/");
-  await expect(page.locator("#metricEvents")).toHaveText("1");
+  await expect(page.locator("#metricEvents")).toHaveText("3");
   await expect(page.locator("#backgroundStatus")).toContainText("ready for other views");
   await page.getByRole("button", { name: "Week", exact: true }).click();
   await expect(page.locator("#metricEvents")).toHaveText("3");

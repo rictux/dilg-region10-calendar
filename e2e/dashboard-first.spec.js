@@ -13,42 +13,51 @@ function feed(request, revision = 1) {
   return { calendar: { id: "office", summary: "Office" }, events };
 }
 
-test("Today renders before annual loading and other menus share the in-progress annual request", async ({ page }) => {
+test("Dashboard renders before annual loading and other menus share the in-progress annual request", async ({ page }) => {
   await setup(page);
   const requests = [];
   let release;
   const annualGate = new Promise(resolve => { release = resolve; });
-  let todayAtAnnualStart;
+  let dashboardAtAnnualStart;
   await page.route("**/api/calendar-feed", async route => {
     const request = route.request().postDataJSON();
     requests.push(request);
     if (request.from.includes("-01-01")) {
-      todayAtAnnualStart = await page.locator("#metricEvents").textContent();
+      dashboardAtAnnualStart = await page.locator("#metricEvents").textContent();
       await annualGate;
     }
     await route.fulfill({ json: feed(request) });
   });
   await page.goto("/");
-  await expect(page.locator("#metricEvents")).toHaveText("1");
+  await expect(page.locator("#metricEvents")).toHaveText("2");
   await expect(page.locator("#backgroundStatus")).toContainText("Preparing 2026");
   await expect.poll(() => requests.length).toBe(2);
-  expect(requests[0]).toMatchObject({ from: "2026-09-22T00:00:00+08:00", to: "2026-09-23T00:00:00+08:00" });
-  expect(todayAtAnnualStart).toBe("1");
+  expect(requests[0]).toMatchObject({ from: "2026-09-01T00:00:00+08:00", to: "2026-10-01T00:00:00+08:00" });
+  expect(dashboardAtAnnualStart).toBe("2");
   await expect(page.locator("#dashboard")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#nextBtn")).toBeEnabled();
-  await page.getByRole("button", { name: "Week", exact: true }).click();
+  // The current month remains usable while the wider annual request is held.
+  for (const [view, count] of [["Today", "1"], ["Week", "2"], ["Month", "2"], ["Dashboard", "2"]]) {
+    await page.locator(".nav").getByRole("button", { name: view, exact: true }).click();
+    await expect(page.locator("#metricEvents")).toHaveText(count);
+    await expect(page.locator("#dashboard")).toHaveAttribute("aria-busy", "false");
+  }
+  await page.getByRole("button", { name: "Calendar View", exact: true }).click();
+  await expect(page.locator("#calendarMonthCount")).toHaveText("2 activities");
+  expect(requests).toHaveLength(2);
+  await page.getByRole("button", { name: "Year", exact: true }).click();
   await expect(page.locator("#agenda .skeleton").first()).toBeVisible();
   expect(requests).toHaveLength(2);
   release();
-  await expect(page.locator("#metricEvents")).toHaveText("2");
-  for (const [view, count] of [["Month", "2"], ["Year", "3"], ["Today", "1"]]) {
+  await expect(page.locator("#metricEvents")).toHaveText("3");
+  for (const [view, count] of [["Dashboard", "2"], ["Week", "2"], ["Month", "2"], ["Today", "1"]]) {
     await page.getByRole("button", { name: view, exact: true }).first().click();
     await expect(page.locator("#metricEvents")).toHaveText(count);
   }
   expect(requests).toHaveLength(2);
 });
 
-test("failed annual prefetch leaves Today usable and retries on Year navigation", async ({ page }) => {
+test("failed annual prefetch leaves Dashboard usable and retries on Year navigation", async ({ page }) => {
   await setup(page);
   let annualRequests = 0;
   await page.route("**/api/calendar-feed", route => {
@@ -59,7 +68,7 @@ test("failed annual prefetch leaves Today usable and retries on Year navigation"
   });
   await page.goto("/");
   await expect(page.locator("#backgroundStatus")).toContainText("will retry");
-  await expect(page.locator("#metricEvents")).toHaveText("1");
+  await expect(page.locator("#metricEvents")).toHaveText("2");
   await expect(page.locator("#dashboard")).toHaveAttribute("aria-busy", "false");
   await page.getByRole("button", { name: "Year", exact: true }).click();
   await expect(page.locator("#metricEvents")).toHaveText("3");

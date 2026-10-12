@@ -50,7 +50,13 @@
         </div>
         <p class="side-label">Summary</p>
         <nav class="nav" aria-label="Activity period">
-          <button class="active" data-view="day" aria-label="Today">
+          <button class="active" data-view="dashboard" aria-label="Dashboard" aria-current="page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Dashboard</span>
+          </button>
+          <button data-view="calendar" aria-label="Calendar View">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4M7 13h2M11 13h2M15 13h2M7 17h2M11 17h2M15 17h2"/></svg><span>Calendar View</span>
+          </button>
+          <button data-view="day" aria-label="Today">
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -112,8 +118,8 @@
       <main id="dashboard" aria-busy="false">
         <header class="topbar">
           <div>
-            <h1 id="pageTitle">Today’s activity</h1>
-            <p id="subtitle">A clear view of where your day is going.</p>
+            <h1 id="pageTitle">Activity dashboard</h1>
+            <p id="subtitle">Patterns and scheduled workload at a glance.</p>
           </div>
           <button class="btn primary" id="addLinkBtn" type="button">Add Link</button>
         </header>
@@ -187,6 +193,7 @@
         </div>
 
         <p id="loadingStatus" class="sr-only" role="status"></p>
+        <div id="dashboardView">
         <section class="metrics">
           <article class="metric">
             <div class="metric-head">
@@ -357,9 +364,21 @@
             <div class="suggestions" id="suggestions"></div>
           </article>
         </section>
+        </div>
+        <section class="calendar-view" id="calendarView" hidden>
+          <article class="card calendar-card">
+            <div class="card-head"><div><h2>Monthly calendar</h2><span>Hover for a quick preview or select a day for details</span></div><span id="calendarMonthCount" role="status"></span></div>
+            <div class="calendar-weekdays" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+            <div class="calendar-grid" id="calendarGrid" role="group" aria-label="Monthly activities calendar"></div>
+          </article>
+        </section>
       </main>
     </div>
 
+    <dialog class="calendar-drawer" id="calendarDrawer" aria-labelledby="calendarDrawerTitle" aria-describedby="calendarDrawerCount">
+      <header class="calendar-drawer-head"><div><span>Activities on</span><h2 id="calendarDrawerTitle">Selected date</h2><p id="calendarDrawerCount"></p></div><button class="calendar-drawer-close" id="calendarDrawerClose" type="button" aria-label="Close activity panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></header>
+      <div class="calendar-drawer-events" id="calendarDrawerEvents"></div>
+    </dialog>
     <dialog id="addLinkDialog" aria-labelledby="addLinkTitle" aria-describedby="addLinkDescription">
       <form class="modal" id="addLinkForm">
         <h2 id="addLinkTitle">Add shared calendars</h2>
